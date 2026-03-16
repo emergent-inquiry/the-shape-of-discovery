@@ -3,6 +3,9 @@ data/*.parquet
 data/*.csv
 data/*.tsv
 data/*.pkl
+data/raw/
+data/.download_state.json
+data/topology_cache/
 data/external/*.txt
 data/external/*.tsv
 data/external/*.csv

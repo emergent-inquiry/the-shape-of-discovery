@@ -95,8 +95,8 @@ def step_clean_citations(tsv_path: Path, valid_patent_ids: set) -> pd.DataFrame:
     reader = pd.read_csv(
         tsv_path,
         sep="\t",
-        dtype={"patent_id": str, "citation_id": str},
-        usecols=["patent_id", "citation_id"],
+        dtype={"patent_id": str, "citation_patent_id": str},
+        usecols=["patent_id", "citation_patent_id"],
         chunksize=chunk_size,
         low_memory=False,
     )
@@ -107,12 +107,12 @@ def step_clean_citations(tsv_path: Path, valid_patent_ids: set) -> pd.DataFrame:
         # Filter: both citing and cited must be in our valid set
         mask = (
             chunk["patent_id"].isin(valid_patent_ids)
-            & chunk["citation_id"].isin(valid_patent_ids)
+            & chunk["citation_patent_id"].isin(valid_patent_ids)
         )
         filtered = chunk[mask].copy()
 
         # Remove self-citations
-        filtered = filtered[filtered["patent_id"] != filtered["citation_id"]]
+        filtered = filtered[filtered["patent_id"] != filtered["citation_patent_id"]]
 
         chunks.append(filtered)
 
@@ -123,7 +123,7 @@ def step_clean_citations(tsv_path: Path, valid_patent_ids: set) -> pd.DataFrame:
     # Rename columns
     df = df.rename(columns={
         "patent_id": "citing_id",
-        "citation_id": "cited_id",
+        "citation_patent_id": "cited_id",
     })
 
     # Deduplicate
@@ -153,6 +153,7 @@ def step_clean_cpc(tsv_path: Path, valid_patent_ids: set) -> tuple[pd.DataFrame,
         tsv_path,
         sep="\t",
         dtype=str,
+        usecols=["patent_id", "cpc_sequence", "cpc_section", "cpc_class", "cpc_subclass"],
         low_memory=False,
     )
 
@@ -161,25 +162,12 @@ def step_clean_cpc(tsv_path: Path, valid_patent_ids: set) -> tuple[pd.DataFrame,
     # Filter to valid patents
     df = df[df["patent_id"].isin(valid_patent_ids)].copy()
 
-    # Extract CPC hierarchy from cpc_group or cpc_subgroup
-    # CPC codes look like: A01B1/00 → section=A, class=A01, subclass=A01B
-    cpc_col = "cpc_subgroup" if "cpc_subgroup" in df.columns else "cpc_group"
-
-    df["cpc_section"] = df[cpc_col].str[0]
-    df["cpc_class"] = df[cpc_col].str[:3]
-    df["cpc_subclass"] = df[cpc_col].str[:4]
-
     # Build the CPC map: unique (patent_id, section, class, subclass) tuples
     cpc_map = df[["patent_id", "cpc_section", "cpc_class", "cpc_subclass"]].drop_duplicates()
 
-    # Get primary CPC per patent (first occurrence, typically the main classification)
-    primary_cpc = (
-        df[df.get("cpc_sequence", df.get("sequence", pd.Series(dtype=str))) == "0"]
-        if "cpc_sequence" in df.columns or "sequence" in df.columns
-        else df.groupby("patent_id").first().reset_index()
-    )
-
-    if isinstance(primary_cpc, pd.DataFrame) and "cpc_section" in primary_cpc.columns:
+    # Get primary CPC per patent (sequence 0 is the main classification)
+    primary_cpc = df[df["cpc_sequence"] == "0"]
+    if len(primary_cpc) > 0:
         primary_map = primary_cpc[["patent_id", "cpc_section"]].drop_duplicates("patent_id")
     else:
         primary_map = cpc_map.groupby("patent_id")["cpc_section"].first().reset_index()

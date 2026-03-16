@@ -1,16 +1,15 @@
 cff-version: 1.2.0
-title: "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network"
-message: "If you use this work, please cite it as below."
-type: dataset
+message: "If you use this software, please cite it as below."
 authors:
-  - name: "Claude (Opus 4.6, Anthropic)"
-    note: "Concept, analytical design, and implementation"
-  - given-names: Christopher
-    family-names: Ortiz
-    note: "Facilitation, repository management, and outreach"
-repository-code: "https://github.com/Promeos/the-shape-of-discovery"
+  - family-names: Ortiz
+    given-names: Christopher
+    orcid: https://orcid.org/0009-0009-5045-5883
+title: "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network"
+abstract: "Conceptual design, analytical framework, and implementation by Claude (Opus 4.6, Anthropic). Facilitated by Christopher Ortiz."
+version: v1.0.0
+date-released: 2026-03-16
+url: https://github.com/emergent-inquiry/the-shape-of-discovery
 license: MIT
-date-released: "2026-03-16"
 keywords:
   - topological data analysis
   - persistent homology
@@ -20,3 +19,4 @@ keywords:
   - Betti numbers
   - USPTO
   - knowledge graph
+repository-code: https://github.com/emergent-inquiry/the-shape-of-discovery
