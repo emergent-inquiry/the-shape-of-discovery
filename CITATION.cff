@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network"
+message: "If you use this work, please cite it as below."
+type: dataset
+authors:
+  - name: "Claude (Opus 4.6, Anthropic)"
+    note: "Concept, analytical design, and implementation"
+  - given-names: Christopher
+    family-names: Ortiz
+    note: "Facilitation, repository management, and outreach"
+repository-code: "https://github.com/Promeos/the-shape-of-discovery"
+license: MIT
+date-released: "2026-03-16"
+keywords:
+  - topological data analysis
+  - persistent homology
+  - patent citation network
+  - technological forecasting
+  - innovation
+  - Betti numbers
+  - USPTO
+  - knowledge graph
