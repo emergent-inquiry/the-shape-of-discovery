@@ -1,0 +1,42 @@
+[
+  {
+    "name": "PageRank Algorithm",
+    "breakthrough_patents": ["6285999", "6799176"],
+    "filing_year": 1998,
+    "recognition_year": 2004,
+    "cpc_primary": ["G06F"],
+    "cpc_sections": ["G"],
+    "category": "computing",
+    "description": "Link-analysis algorithm for ranking web pages (Google)"
+  },
+  {
+    "name": "MapReduce Distributed Computing",
+    "breakthrough_patents": ["7650331"],
+    "filing_year": 2004,
+    "recognition_year": 2008,
+    "cpc_primary": ["G06F"],
+    "cpc_sections": ["G"],
+    "category": "computing",
+    "description": "Programming model for parallel processing of large datasets (Google)"
+  },
+  {
+    "name": "Multi-Touch Interface (iPhone)",
+    "breakthrough_patents": ["7479949", "7657849"],
+    "filing_year": 2005,
+    "recognition_year": 2007,
+    "cpc_primary": ["G06F"],
+    "cpc_sections": ["G", "H"],
+    "category": "computing",
+    "description": "Capacitive multi-touch screen with gesture recognition (Apple)"
+  },
+  {
+    "name": "USB Universal Serial Bus",
+    "breakthrough_patents": ["5535341", "5734903"],
+    "filing_year": 1994,
+    "recognition_year": 1998,
+    "cpc_primary": ["G06F", "H04L"],
+    "cpc_sections": ["G", "H"],
+    "category": "computing",
+    "description": "Universal serial bus standard for peripheral connectivity"
+  }
+]

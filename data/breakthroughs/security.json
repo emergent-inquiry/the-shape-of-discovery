@@ -1,0 +1,42 @@
+[
+  {
+    "name": "RSA Public-Key Encryption",
+    "breakthrough_patents": ["4405829"],
+    "filing_year": 1977,
+    "recognition_year": 1983,
+    "cpc_primary": ["H04L"],
+    "cpc_sections": ["H", "G"],
+    "category": "security",
+    "description": "Asymmetric cryptographic system based on prime factorization difficulty"
+  },
+  {
+    "name": "SSL/TLS Secure Communication",
+    "breakthrough_patents": ["5657390", "5825890"],
+    "filing_year": 1995,
+    "recognition_year": 2000,
+    "cpc_primary": ["H04L"],
+    "cpc_sections": ["H"],
+    "category": "security",
+    "description": "Secure Sockets Layer / Transport Layer Security protocol for encrypted web communication"
+  },
+  {
+    "name": "Public Key Infrastructure (PKI)",
+    "breakthrough_patents": ["4868877", "5005200"],
+    "filing_year": 1987,
+    "recognition_year": 1995,
+    "cpc_primary": ["H04L"],
+    "cpc_sections": ["H", "G"],
+    "category": "security",
+    "description": "Digital certificate-based public key infrastructure for identity verification"
+  },
+  {
+    "name": "Elliptic Curve Cryptography",
+    "breakthrough_patents": ["5272755", "5159632"],
+    "filing_year": 1991,
+    "recognition_year": 2004,
+    "cpc_primary": ["H04L"],
+    "cpc_sections": ["H", "G"],
+    "category": "security",
+    "description": "Public-key cryptography based on elliptic curve discrete logarithm problem"
+  }
+]

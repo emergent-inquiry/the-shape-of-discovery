@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Lithium-Ion Battery",
+    "breakthrough_patents": ["4302518", "4668595", "5028500"],
+    "filing_year": 1980,
+    "recognition_year": 1991,
+    "cpc_primary": ["H01M"],
+    "cpc_sections": ["H", "C"],
+    "category": "materials",
+    "description": "Rechargeable lithium-ion battery with layered oxide cathode (Goodenough/Sony)"
+  },
+  {
+    "name": "OLED Display Technology",
+    "breakthrough_patents": ["4769292", "5844363"],
+    "filing_year": 1987,
+    "recognition_year": 2003,
+    "cpc_primary": ["H05B", "H10K"],
+    "cpc_sections": ["H", "C"],
+    "category": "materials",
+    "description": "Organic light-emitting diode displays with thin-film electroluminescence"
+  },
+  {
+    "name": "Graphene Production",
+    "breakthrough_patents": ["7071258", "7781061"],
+    "filing_year": 2004,
+    "recognition_year": 2010,
+    "cpc_primary": ["C01B", "B82Y"],
+    "cpc_sections": ["C", "B"],
+    "category": "materials",
+    "description": "Isolation and production methods for single-layer graphene sheets"
+  },
+  {
+    "name": "Carbon Fiber Composites",
+    "breakthrough_patents": ["4100004", "4197279"],
+    "filing_year": 1977,
+    "recognition_year": 1985,
+    "cpc_primary": ["C08J", "B29C"],
+    "cpc_sections": ["C", "B"],
+    "category": "materials",
+    "description": "High-strength carbon fiber reinforced polymer composites"
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Backpropagation Learning Algorithm",
+    "breakthrough_patents": ["5063531"],
+    "filing_year": 1989,
+    "recognition_year": 1995,
+    "cpc_primary": ["G06N"],
+    "cpc_sections": ["G"],
+    "category": "ai_ml",
+    "description": "Error backpropagation for training multi-layer neural networks"
+  },
+  {
+    "name": "GPU General-Purpose Computing (CUDA)",
+    "breakthrough_patents": ["7015913", "6947047"],
+    "filing_year": 2003,
+    "recognition_year": 2007,
+    "cpc_primary": ["G06F", "G06T"],
+    "cpc_sections": ["G"],
+    "category": "ai_ml",
+    "description": "General-purpose computation on graphics processing units (NVIDIA CUDA)"
+  },
+  {
+    "name": "Convolutional Neural Networks",
+    "breakthrough_patents": ["5058179"],
+    "filing_year": 1990,
+    "recognition_year": 2012,
+    "cpc_primary": ["G06N", "G06V"],
+    "cpc_sections": ["G"],
+    "category": "ai_ml",
+    "description": "Convolutional neural networks for image recognition (LeCun/AT&T)"
+  },
+  {
+    "name": "Recurrent Neural Network (LSTM)",
+    "breakthrough_patents": ["5638359"],
+    "filing_year": 1995,
+    "recognition_year": 2014,
+    "cpc_primary": ["G06N"],
+    "cpc_sections": ["G"],
+    "category": "ai_ml",
+    "description": "Long Short-Term Memory recurrent neural network architecture"
+  }
+]

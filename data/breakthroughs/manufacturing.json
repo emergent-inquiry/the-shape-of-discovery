@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Selective Laser Sintering (SLS) 3D Printing",
+    "breakthrough_patents": ["4863538", "5132143"],
+    "filing_year": 1986,
+    "recognition_year": 1995,
+    "cpc_primary": ["B29C", "B33Y"],
+    "cpc_sections": ["B"],
+    "category": "manufacturing",
+    "description": "Additive manufacturing using laser to sinter powdered material layer by layer"
+  },
+  {
+    "name": "Fused Deposition Modeling (FDM) 3D Printing",
+    "breakthrough_patents": ["5121329", "5503785"],
+    "filing_year": 1989,
+    "recognition_year": 2009,
+    "cpc_primary": ["B29C", "B33Y"],
+    "cpc_sections": ["B"],
+    "category": "manufacturing",
+    "description": "Additive manufacturing by extruding thermoplastic filament (Stratasys)"
+  },
+  {
+    "name": "EUV Lithography",
+    "breakthrough_patents": ["6031598", "6576380"],
+    "filing_year": 1998,
+    "recognition_year": 2018,
+    "cpc_primary": ["G03F", "H01L"],
+    "cpc_sections": ["G", "H"],
+    "category": "manufacturing",
+    "description": "Extreme ultraviolet lithography for sub-7nm semiconductor patterning"
+  },
+  {
+    "name": "CMOS Image Sensor",
+    "breakthrough_patents": ["5471515", "5841126"],
+    "filing_year": 1993,
+    "recognition_year": 2000,
+    "cpc_primary": ["H04N", "H01L"],
+    "cpc_sections": ["H", "G"],
+    "category": "manufacturing",
+    "description": "Active-pixel CMOS image sensors replacing CCD technology"
+  }
+]

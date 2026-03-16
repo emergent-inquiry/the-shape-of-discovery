@@ -1,0 +1,42 @@
+[
+  {
+    "name": "4G LTE Wireless Standard",
+    "breakthrough_patents": ["8169953", "8265033"],
+    "filing_year": 2008,
+    "recognition_year": 2012,
+    "cpc_primary": ["H04W", "H04L"],
+    "cpc_sections": ["H"],
+    "category": "telecom",
+    "description": "Long-Term Evolution wireless broadband standard using OFDMA"
+  },
+  {
+    "name": "Erbium-Doped Fiber Amplifier (EDFA)",
+    "breakthrough_patents": ["4859016", "5027079"],
+    "filing_year": 1987,
+    "recognition_year": 1995,
+    "cpc_primary": ["H01S", "G02B"],
+    "cpc_sections": ["H", "G"],
+    "category": "telecom",
+    "description": "Optical fiber amplifier enabling long-haul fiber optic telecommunications"
+  },
+  {
+    "name": "WiFi (IEEE 802.11)",
+    "breakthrough_patents": ["5487069", "5506866"],
+    "filing_year": 1993,
+    "recognition_year": 1999,
+    "cpc_primary": ["H04W", "H04L"],
+    "cpc_sections": ["H"],
+    "category": "telecom",
+    "description": "Wireless local area networking using spread spectrum in ISM bands"
+  },
+  {
+    "name": "Bluetooth Short-Range Wireless",
+    "breakthrough_patents": ["6590928", "6944148"],
+    "filing_year": 1999,
+    "recognition_year": 2003,
+    "cpc_primary": ["H04W", "H04B"],
+    "cpc_sections": ["H"],
+    "category": "telecom",
+    "description": "Short-range wireless personal area networking protocol"
+  }
+]

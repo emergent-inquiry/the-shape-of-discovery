@@ -1,0 +1,62 @@
+[
+  {
+    "name": "CRISPR-Cas9 Gene Editing",
+    "breakthrough_patents": ["8697359", "8771945", "8889356"],
+    "filing_year": 2012,
+    "recognition_year": 2015,
+    "cpc_primary": ["C12N", "C07K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Programmable genome editing using CRISPR-Cas9 system"
+  },
+  {
+    "name": "mRNA Vaccine Platform",
+    "breakthrough_patents": ["10703789", "10898574", "10702600"],
+    "filing_year": 2015,
+    "recognition_year": 2020,
+    "cpc_primary": ["A61K", "C12N"],
+    "cpc_sections": ["A", "C"],
+    "category": "biotech",
+    "description": "Modified mRNA encoding antigens for vaccination (Moderna/BioNTech)"
+  },
+  {
+    "name": "Monoclonal Antibody Therapy (Adalimumab/Humira)",
+    "breakthrough_patents": ["6090382", "6258562"],
+    "filing_year": 1996,
+    "recognition_year": 2002,
+    "cpc_primary": ["C07K", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Fully human monoclonal antibodies targeting TNF-alpha for autoimmune disease"
+  },
+  {
+    "name": "CAR-T Cell Therapy",
+    "breakthrough_patents": ["7446190", "8906682"],
+    "filing_year": 2003,
+    "recognition_year": 2017,
+    "cpc_primary": ["C12N", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Chimeric antigen receptor T-cells for cancer immunotherapy"
+  },
+  {
+    "name": "Polymerase Chain Reaction (PCR)",
+    "breakthrough_patents": ["4683195", "4683202", "4965188"],
+    "filing_year": 1985,
+    "recognition_year": 1993,
+    "cpc_primary": ["C12Q", "C12P"],
+    "cpc_sections": ["C"],
+    "category": "biotech",
+    "description": "Enzymatic amplification of specific DNA sequences"
+  },
+  {
+    "name": "Recombinant Human Insulin",
+    "breakthrough_patents": ["4431740", "4652525"],
+    "filing_year": 1980,
+    "recognition_year": 1982,
+    "cpc_primary": ["C07K", "C12N"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Genetically engineered human insulin produced in bacteria"
+  }
+]

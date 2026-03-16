@@ -1,0 +1,42 @@
+[
+  {
+    "name": "PERC Solar Cell",
+    "breakthrough_patents": ["4927770"],
+    "filing_year": 1988,
+    "recognition_year": 2012,
+    "cpc_primary": ["H01L"],
+    "cpc_sections": ["H"],
+    "category": "energy",
+    "description": "Passivated emitter and rear cell design for high-efficiency silicon solar cells"
+  },
+  {
+    "name": "Hydraulic Fracturing with Horizontal Drilling",
+    "breakthrough_patents": ["5131472", "5335726", "5474131"],
+    "filing_year": 1990,
+    "recognition_year": 2005,
+    "cpc_primary": ["E21B"],
+    "cpc_sections": ["E"],
+    "category": "energy",
+    "description": "Horizontal drilling combined with multi-stage hydraulic fracturing for shale gas/oil"
+  },
+  {
+    "name": "PEM Fuel Cell",
+    "breakthrough_patents": ["4876115", "5272017"],
+    "filing_year": 1988,
+    "recognition_year": 2000,
+    "cpc_primary": ["H01M"],
+    "cpc_sections": ["H", "C"],
+    "category": "energy",
+    "description": "Proton exchange membrane fuel cells for clean energy conversion"
+  },
+  {
+    "name": "Modern Wind Turbine (Variable Speed)",
+    "breakthrough_patents": ["5083039", "5289041"],
+    "filing_year": 1990,
+    "recognition_year": 2000,
+    "cpc_primary": ["F03D"],
+    "cpc_sections": ["F"],
+    "category": "energy",
+    "description": "Variable-speed wind turbine with pitch control and power electronics"
+  }
+]
