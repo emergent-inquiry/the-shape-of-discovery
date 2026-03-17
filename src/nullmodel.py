@@ -18,8 +18,11 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.breakthroughs import Breakthrough, get_precursor_window
-from src.topology import sliding_window_topology, topology_summary, reduce_graph
-from src.graph import cpc_subgraph_nx
+from src.topology import (
+    sliding_window_topology, topology_summary, topology_summary_directed,
+    reduce_graph,
+)
+from src.graph import cpc_subgraph_nx, cpc_subgraph_directed
 from src.utils import DATA_DIR, get_logger, timer
 
 logger = get_logger(__name__)
@@ -44,6 +47,7 @@ def random_cpc_pair_baseline(
     max_nodes: int = 30_000,
     seed: int = 42,
     use_cache: bool = True,
+    backend: str = "ripser",
 ) -> pd.DataFrame:
     """Generate null topology measurements from random CPC pairs and years.
 
@@ -60,13 +64,15 @@ def random_cpc_pair_baseline(
         max_nodes: Max nodes per subgraph.
         seed: Random seed for reproducibility.
         use_cache: Whether to cache results.
+        backend: ``'ripser'`` or ``'flagser'``.
 
     Returns:
         DataFrame with topology metrics for each random sample.
     """
-    cache_file = NULL_CACHE / f"random_baseline_n{n_samples}_w{window_years}_s{seed}.pkl"
+    suffix = f"_{backend}" if backend != "ripser" else ""
+    cache_file = NULL_CACHE / f"random_baseline_n{n_samples}_w{window_years}_s{seed}{suffix}.pkl"
     if use_cache and cache_file.exists():
-        logger.info("Loading cached random baseline")
+        logger.info("Loading cached random baseline [%s]", backend)
         with open(cache_file, "rb") as f:
             return pickle.load(f)
 
@@ -82,7 +88,7 @@ def random_cpc_pair_baseline(
             section_pairs.append((a, b))
 
     rows = []
-    for i in tqdm(range(n_samples), desc="Random baseline"):
+    for i in tqdm(range(n_samples), desc=f"Random baseline [{backend}]"):
         # Random section pair and year
         pair_idx = rng.integers(0, len(section_pairs))
         sec_a, sec_b = section_pairs[pair_idx]
@@ -98,13 +104,18 @@ def random_cpc_pair_baseline(
         if len(window_cites) == 0:
             continue
 
-        G = cpc_subgraph_nx(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+        if backend == "flagser":
+            sg = cpc_subgraph_directed(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+            if sg.n_nodes < 3:
+                continue
+            summary = topology_summary_directed(sg.adj, max_dim=max_dim, max_nodes=max_nodes)
+        else:
+            G = cpc_subgraph_nx(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+            if G.number_of_nodes() < 3:
+                continue
+            G = reduce_graph(G, max_nodes=max_nodes)
+            summary = topology_summary(G, max_dim=max_dim)
 
-        if G.number_of_nodes() < 3:
-            continue
-
-        G = reduce_graph(G, max_nodes=max_nodes)
-        summary = topology_summary(G, max_dim=max_dim)
         summary["year"] = year
         summary["section_a"] = sec_a
         summary["section_b"] = sec_b
@@ -118,7 +129,7 @@ def random_cpc_pair_baseline(
         with open(cache_file, "wb") as f:
             pickle.dump(result, f)
 
-    logger.info("Random baseline: %d/%d samples computed", len(result), n_samples)
+    logger.info("Random baseline: %d/%d samples computed [%s]", len(result), n_samples, backend)
     return result
 
 
@@ -139,6 +150,7 @@ def matched_null(
     max_nodes: int = 30_000,
     seed: int = 42,
     use_cache: bool = True,
+    backend: str = "ripser",
 ) -> pd.DataFrame:
     """Generate null topology measurements matched to a specific breakthrough.
 
@@ -157,14 +169,16 @@ def matched_null(
         max_nodes: Max nodes per subgraph.
         seed: Random seed.
         use_cache: Whether to cache.
+        backend: ``'ripser'`` or ``'flagser'``.
 
     Returns:
         DataFrame of null topology measurements.
     """
     bt_name = breakthrough.name.replace(" ", "_").lower()[:30]
-    cache_file = NULL_CACHE / f"matched_{bt_name}_n{n_samples}_s{seed}.pkl"
+    suffix = f"_{backend}" if backend != "ripser" else ""
+    cache_file = NULL_CACHE / f"matched_{bt_name}_n{n_samples}_s{seed}{suffix}.pkl"
     if use_cache and cache_file.exists():
-        logger.info("Loading cached matched null for %s", breakthrough.name)
+        logger.info("Loading cached matched null for %s [%s]", breakthrough.name, backend)
         with open(cache_file, "rb") as f:
             return pickle.load(f)
 
@@ -193,7 +207,7 @@ def matched_null(
         return pd.DataFrame()
 
     rows = []
-    for i in tqdm(range(n_samples), desc=f"Matched null: {breakthrough.name}"):
+    for i in tqdm(range(n_samples), desc=f"Matched null: {breakthrough.name} [{backend}]"):
         year = int(rng.choice(null_years))
 
         win_start = pd.Timestamp(f"{year - window_years + 1}-01-01")
@@ -205,13 +219,18 @@ def matched_null(
         if len(window_cites) == 0:
             continue
 
-        G = cpc_subgraph_nx(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+        if backend == "flagser":
+            sg = cpc_subgraph_directed(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+            if sg.n_nodes < 3:
+                continue
+            summary = topology_summary_directed(sg.adj, max_dim=max_dim, max_nodes=max_nodes)
+        else:
+            G = cpc_subgraph_nx(window_cites, cpc_map, sec_a, sec_b, max_nodes=max_nodes)
+            if G.number_of_nodes() < 3:
+                continue
+            G = reduce_graph(G, max_nodes=max_nodes)
+            summary = topology_summary(G, max_dim=max_dim)
 
-        if G.number_of_nodes() < 3:
-            continue
-
-        G = reduce_graph(G, max_nodes=max_nodes)
-        summary = topology_summary(G, max_dim=max_dim)
         summary["year"] = year
         summary["section_a"] = sec_a
         summary["section_b"] = sec_b
@@ -226,8 +245,8 @@ def matched_null(
             pickle.dump(result, f)
 
     logger.info(
-        "Matched null for %s: %d/%d samples computed",
-        breakthrough.name, len(result), n_samples,
+        "Matched null for %s: %d/%d samples computed [%s]",
+        breakthrough.name, len(result), n_samples, backend,
     )
     return result
 

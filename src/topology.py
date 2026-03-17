@@ -6,10 +6,14 @@ breakthroughs.
 
 Design decisions:
     - Work on CPC section-pair subgraphs, never the full 8M-node graph.
-    - Use ripser (fastest available) with sparse distance matrices.
+    - Two backends: ripser (Vietoris-Rips on undirected graphs) and
+      pyflagser (directed flag complex on directed citation graphs).
+    - pyflagser is preferred: it preserves citation direction and skips the
+      expensive distance matrix computation that causes OOM on large subgraphs.
     - Fall back to giotto-tda if ripser fails on specific inputs.
     - Tractability cascade: degree pruning → landmark subsampling → alternative filtration.
     - All expensive results are cached to data/topology_cache/ as pickle.
+    - Cache keys include backend name to prevent cross-contamination.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ import pandas as pd
 from scipy import sparse
 from scipy.sparse.csgraph import shortest_path
 
-from src.graph import cpc_subgraph_nx, SparseGraph
+from src.graph import cpc_subgraph_nx, cpc_subgraph_directed, SparseGraph
 from src.utils import DATA_DIR, get_logger, log_memory, timer
 
 logger = get_logger(__name__)
@@ -161,6 +165,58 @@ def reduce_graph(G: nx.Graph, max_nodes: int = 30_000) -> nx.Graph:
     return G
 
 
+def reduce_sparse_digraph(
+    adj: sparse.csr_matrix,
+    max_nodes: int = 30_000,
+) -> tuple[sparse.csr_matrix, np.ndarray]:
+    """Reduce a directed sparse adjacency matrix while preserving topology.
+
+    Same cascade as ``reduce_graph()`` but operates on sparse matrices directly,
+    avoiding NetworkX overhead. Used by the flagser backend.
+
+    Args:
+        adj: Sparse directed adjacency matrix.
+        max_nodes: Target maximum node count.
+
+    Returns:
+        Tuple of (reduced adjacency, array of kept original indices).
+    """
+    n = adj.shape[0]
+    kept = np.arange(n)
+
+    if n <= max_nodes:
+        return adj, kept
+
+    # Step 1: Remove leaves (total degree <= 1)
+    in_deg = np.array(adj.sum(axis=0)).flatten()
+    out_deg = np.array(adj.sum(axis=1)).flatten()
+    total_deg = in_deg + out_deg
+    non_leaf = total_deg > 1
+
+    if non_leaf.sum() < n:
+        idx = np.where(non_leaf)[0]
+        adj = adj[idx][:, idx]
+        kept = kept[idx]
+        logger.info(
+            "Removed %d leaves, %d nodes remaining",
+            n - len(idx), len(idx),
+        )
+
+    if adj.shape[0] <= max_nodes:
+        return adj, kept
+
+    # Step 2: Keep highest-degree nodes
+    in_deg = np.array(adj.sum(axis=0)).flatten()
+    out_deg = np.array(adj.sum(axis=1)).flatten()
+    total_deg = in_deg + out_deg
+    top_idx = np.argsort(total_deg)[-max_nodes:]
+    adj = adj[top_idx][:, top_idx]
+    kept = kept[top_idx]
+    logger.info("Subsampled to %d highest-degree nodes", adj.shape[0])
+
+    return adj, kept
+
+
 # ---------------------------------------------------------------------------
 # Persistent homology
 # ---------------------------------------------------------------------------
@@ -253,6 +309,79 @@ def _compute_persistence_giotto(G: nx.Graph, max_dim: int = 2) -> dict:
         dgms.append(diagrams[0][mask, :2])
 
     return {"dgms": dgms, "n_nodes": n, "n_edges": G.number_of_edges()}
+
+
+def compute_persistence_flagser(
+    adj: sparse.csr_matrix,
+    max_dim: int = 2,
+    directed: bool = True,
+) -> dict:
+    """Compute persistent homology of a directed flag complex using pyflagser.
+
+    pyflagser takes a directed adjacency matrix directly — no distance matrix
+    needed. This eliminates the memory-intensive shortest-path computation
+    and preserves citation direction.
+
+    Args:
+        adj: Sparse directed adjacency matrix (rows cite columns).
+        max_dim: Maximum homological dimension (0, 1, or 2).
+        directed: If True, compute on the directed flag complex.
+            If False, symmetrize first (equivalent to undirected clique complex).
+
+    Returns:
+        Dict with:
+            - 'dgms': list of persistence diagrams (birth-death pairs) per dimension
+            - 'n_nodes': number of nodes
+            - 'n_edges': number of directed edges
+    """
+    from pyflagser import flagser_weighted
+
+    n = adj.shape[0]
+    n_edges = adj.nnz
+
+    if n == 0:
+        return {
+            "dgms": [np.empty((0, 2)) for _ in range(max_dim + 1)],
+            "n_nodes": 0,
+            "n_edges": 0,
+        }
+
+    if n == 1:
+        dgms = [np.array([[0.0, np.inf]])]
+        dgms.extend([np.empty((0, 2)) for _ in range(max_dim)])
+        return {"dgms": dgms, "n_nodes": 1, "n_edges": 0}
+
+    log_memory(f"Before flagser ({n} nodes, {n_edges} edges)")
+
+    # Ensure binary adjacency with no self-loops, float64 for flagser_weighted
+    adj = (adj > 0).astype(np.float64)
+    adj.setdiag(0)
+    adj.eliminate_zeros()
+
+    # flagser_weighted with default filtration returns persistence diagrams;
+    # flagser_unweighted only returns Betti numbers without diagrams.
+    result = flagser_weighted(
+        adj,
+        directed=directed,
+        max_dimension=max_dim,
+        min_dimension=0,
+    )
+
+    log_memory(f"After flagser ({n} nodes)")
+
+    dgms = result["dgms"]
+
+    # Ensure each diagram is a 2D array (flagser may return empty list)
+    for i in range(max_dim + 1):
+        if i >= len(dgms) or len(dgms[i]) == 0:
+            if i < len(dgms):
+                dgms[i] = np.empty((0, 2))
+            else:
+                dgms.append(np.empty((0, 2)))
+        else:
+            dgms[i] = np.asarray(dgms[i], dtype=np.float64)
+
+    return {"dgms": dgms[:max_dim + 1], "n_nodes": n, "n_edges": n_edges}
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +527,72 @@ def topology_summary(G: nx.Graph, max_dim: int = 2, max_hops: int = 5) -> dict:
     }
 
 
+def topology_summary_directed(
+    adj: sparse.csr_matrix,
+    max_dim: int = 2,
+    max_nodes: int = 30_000,
+) -> dict:
+    """Compute a full topological summary of a directed graph using pyflagser.
+
+    Mirrors ``topology_summary()`` but operates on directed sparse adjacency,
+    using flagser instead of ripser.
+
+    Args:
+        adj: Sparse directed adjacency matrix.
+        max_dim: Maximum homological dimension.
+        max_nodes: Max nodes before reduction.
+
+    Returns:
+        Dict with β₀, β₁, β₂, persistence_entropy, max_persistence,
+        n_long_lived_features, n_nodes, n_edges, backend.
+    """
+    adj, _ = reduce_sparse_digraph(adj, max_nodes=max_nodes)
+
+    result = compute_persistence_flagser(adj, max_dim=max_dim, directed=True)
+    dgms = result["dgms"]
+
+    bettis = betti_numbers(dgms)
+
+    # Persistence entropy across all dimensions
+    all_finite = []
+    for dgm in dgms:
+        if len(dgm) > 0:
+            finite = dgm[np.isfinite(dgm[:, 1])]
+            if len(finite) > 0:
+                all_finite.append(finite)
+
+    combined = np.vstack(all_finite) if all_finite else np.empty((0, 2))
+    pe = persistence_entropy(combined)
+
+    # Max persistence (finite features only)
+    max_pers = 0.0
+    for dgm in dgms:
+        if len(dgm) > 0:
+            finite = dgm[np.isfinite(dgm[:, 1])]
+            if len(finite) > 0:
+                lifetimes = finite[:, 1] - finite[:, 0]
+                max_pers = max(max_pers, float(lifetimes.max()))
+
+    # Long-lived features: persistence > median persistence
+    n_long = 0
+    if len(combined) > 0:
+        lifetimes = combined[:, 1] - combined[:, 0]
+        median_pers = np.median(lifetimes)
+        n_long = int(np.sum(lifetimes > median_pers))
+
+    return {
+        "beta_0": bettis[0] if len(bettis) > 0 else 0,
+        "beta_1": bettis[1] if len(bettis) > 1 else 0,
+        "beta_2": bettis[2] if len(bettis) > 2 else 0,
+        "persistence_entropy": pe,
+        "max_persistence": max_pers,
+        "n_long_lived_features": n_long,
+        "n_nodes": result["n_nodes"],
+        "n_edges": result["n_edges"],
+        "backend": "flagser",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Sliding window topology
 # ---------------------------------------------------------------------------
@@ -416,6 +611,7 @@ def sliding_window_topology(
     max_dim: int = 2,
     max_nodes: int = 30_000,
     use_cache: bool = True,
+    backend: str = "ripser",
 ) -> pd.DataFrame:
     """Compute persistent homology across sliding time windows for a CPC pair.
 
@@ -426,7 +622,8 @@ def sliding_window_topology(
         4. Compute persistent homology
         5. Summarize topological features
 
-    Results are cached per (section_pair, window_params) to avoid recomputation.
+    Results are cached per (section_pair, window_params, backend) to avoid
+    recomputation.
 
     Args:
         citations: Full citation DataFrame with citing_id, cited_id, citing_date.
@@ -441,6 +638,8 @@ def sliding_window_topology(
         max_dim: Maximum homological dimension.
         max_nodes: Max nodes per subgraph before reduction.
         use_cache: Whether to use/save cached results.
+        backend: ``'ripser'`` for Vietoris-Rips on undirected graph, or
+            ``'flagser'`` for directed flag complex persistence (preferred).
 
     Returns:
         DataFrame with one row per window: year, β₀, β₁, β₂,
@@ -448,16 +647,17 @@ def sliding_window_topology(
         n_nodes, n_edges.
     """
     pair_key = f"{section_a}_{section_b}"
-    cache_file = TOPOLOGY_CACHE / f"sliding_{pair_key}_w{window_years}_s{stride_years}.pkl"
+    suffix = f"_{backend}" if backend != "ripser" else ""
+    cache_file = TOPOLOGY_CACHE / f"sliding_{pair_key}_w{window_years}_s{stride_years}{suffix}.pkl"
 
     if use_cache and cache_file.exists():
-        logger.info("Loading cached topology for (%s, %s)", section_a, section_b)
+        logger.info("Loading cached topology for (%s, %s) [%s]", section_a, section_b, backend)
         with open(cache_file, "rb") as f:
             return pickle.load(f)
 
     logger.info(
-        "Computing sliding-window topology for (%s, %s): %d-%d, window=%d, stride=%d",
-        section_a, section_b, start_year, end_year, window_years, stride_years,
+        "Computing sliding-window topology for (%s, %s): %d-%d, window=%d, stride=%d [%s]",
+        section_a, section_b, start_year, end_year, window_years, stride_years, backend,
     )
 
     # Pre-filter citations to relevant CPC sections ONCE (avoids rescanning
@@ -489,18 +689,24 @@ def sliding_window_topology(
             logger.info("  Year %d: no citations in window, skipping", year)
             continue
 
-        # Build CPC-pair subgraph (undirected, for topology)
-        G = cpc_subgraph_nx(window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes)
+        if backend == "flagser":
+            sg = cpc_subgraph_directed(
+                window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes,
+            )
+            if sg.n_nodes < 3:
+                logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, sg.n_nodes)
+                continue
+            summary = topology_summary_directed(sg.adj, max_dim=max_dim, max_nodes=max_nodes)
+        else:
+            G = cpc_subgraph_nx(
+                window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes,
+            )
+            if G.number_of_nodes() < 3:
+                logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, G.number_of_nodes())
+                continue
+            G = reduce_graph(G, max_nodes=max_nodes)
+            summary = topology_summary(G, max_dim=max_dim)
 
-        if G.number_of_nodes() < 3:
-            logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, G.number_of_nodes())
-            continue
-
-        # Reduce if needed
-        G = reduce_graph(G, max_nodes=max_nodes)
-
-        # Compute topology
-        summary = topology_summary(G, max_dim=max_dim)
         summary["year"] = year
         rows.append(summary)
 

@@ -259,6 +259,49 @@ def cpc_subgraph_nx(
     return G
 
 
+def cpc_subgraph_directed(
+    citations: pd.DataFrame,
+    cpc_map: pd.DataFrame,
+    section_a: str,
+    section_b: str,
+    max_nodes: int = 50_000,
+) -> SparseGraph:
+    """Extract a CPC-pair subgraph as a directed SparseGraph.
+
+    Unlike ``cpc_subgraph_nx()``, this preserves citation direction for use
+    with directed flag complex persistence (pyflagser). No symmetrization.
+
+    Args:
+        citations: Full citation DataFrame.
+        cpc_map: DataFrame with ``patent_id`` and ``cpc_section``.
+        section_a: First CPC section letter.
+        section_b: Second CPC section letter.
+        max_nodes: Maximum nodes before subsampling by total degree.
+
+    Returns:
+        SparseGraph with directed adjacency (rows cite columns).
+    """
+    sg = cpc_subgraph(citations, cpc_map, section_a, section_b)
+
+    if sg.n_nodes > max_nodes:
+        logger.warning(
+            "CPC subgraph (%s, %s) has %d nodes (> %d). Subsampling.",
+            section_a, section_b, sg.n_nodes, max_nodes,
+        )
+        degrees = np.array(sg.adj.sum(axis=0) + sg.adj.sum(axis=1).T).flatten()
+        top_idx = np.argsort(degrees)[-max_nodes:]
+        sub_adj = sg.adj[top_idx][:, top_idx]
+        sub_ids = sg.idx_to_id[top_idx]
+        sub_id_to_idx = {pid: i for i, pid in enumerate(sub_ids)}
+        sg = SparseGraph(adj=sub_adj, id_to_idx=sub_id_to_idx, idx_to_id=sub_ids)
+
+    logger.info(
+        "Directed subgraph (%s, %s): %d nodes, %d edges",
+        section_a, section_b, sg.n_nodes, sg.n_edges,
+    )
+    return sg
+
+
 # ---------------------------------------------------------------------------
 # Cross-class edge analysis
 # ---------------------------------------------------------------------------

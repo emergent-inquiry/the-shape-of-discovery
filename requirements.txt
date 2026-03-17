@@ -11,6 +11,7 @@ networkx>=3.1
 
 # Topological data analysis
 ripser>=0.6
+pyflagser>=0.4
 giotto-tda>=0.6
 persim>=0.3
 
