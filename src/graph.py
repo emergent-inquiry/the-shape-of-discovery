@@ -69,10 +69,15 @@ def build_citation_graph(
         SparseGraph with CSR adjacency and ID mappings.
     """
     # Build the ID universe: union of all citing and cited IDs
-    all_ids = pd.unique(
+    unique_ids = pd.unique(
         pd.concat([citations["citing_id"], citations["cited_id"]])
     )
-    all_ids.sort()
+    # pd.unique may return ndarray or ExtensionArray — normalize to numpy
+    if hasattr(unique_ids, "to_numpy"):
+        unique_ids = unique_ids.to_numpy(dtype=str, na_value="")
+    else:
+        unique_ids = np.asarray(unique_ids, dtype=str)
+    all_ids = np.sort(unique_ids)
 
     id_to_idx = {pid: i for i, pid in enumerate(all_ids)}
     idx_to_id = all_ids

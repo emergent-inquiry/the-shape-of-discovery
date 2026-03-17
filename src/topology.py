@@ -71,6 +71,8 @@ def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 3) -> sparse.csr_
     This function only keeps distances up to max_hops, making the
     distance matrix sparse and tractable for ripser.
 
+    Uses vectorized sparse operations instead of Python loops for performance.
+
     Args:
         G: Undirected NetworkX graph.
         max_hops: Maximum distance to keep.
@@ -81,18 +83,37 @@ def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 3) -> sparse.csr_
     adj = nx.to_scipy_sparse_array(G, format="csr", dtype=np.float64)
     n = adj.shape[0]
 
-    # Power iteration to find k-hop neighbors
-    dist = sparse.lil_matrix((n, n), dtype=np.float64)
-    current = adj.copy()
+    # Binary adjacency (no weights)
+    adj_bin = (adj > 0).astype(np.float64)
+    adj_bin.setdiag(0)
+    adj_bin.eliminate_zeros()
 
-    for hop in range(1, max_hops + 1):
-        rows, cols = current.nonzero()
-        for r, c in zip(rows, cols):
-            if r != c and dist[r, c] == 0:
-                dist[r, c] = hop
+    # Initialize distance with hop-1 neighbors
+    dist = adj_bin.copy()
+    # Track which pairs have been assigned a distance (int8 to avoid bool underflow)
+    reached = adj_bin.astype(np.int8)
 
-        if hop < max_hops:
-            current = current @ adj
+    current_power = adj_bin.copy()
+    for hop in range(2, max_hops + 1):
+        current_power = current_power @ adj_bin
+        current_power.setdiag(0)
+
+        # New pairs: reachable at this hop but not yet discovered
+        # Cast to int8 before subtraction to avoid bool underflow (False - True wraps)
+        new_pairs = (current_power > 0).astype(np.int8) - (reached > 0).astype(np.int8)
+        new_pairs = new_pairs.multiply(new_pairs > 0)  # Clip negatives
+        new_pairs.eliminate_zeros()  # Remove explicit zeros before setting data
+
+        if new_pairs.nnz == 0:
+            break
+
+        # Assign distance = hop to newly discovered pairs only
+        new_dist = new_pairs.astype(np.float64)
+        new_dist.data[:] = float(hop)
+        dist = dist + new_dist
+
+        # Update reached mask
+        reached = reached + new_pairs.astype(np.int8)
 
     return dist.tocsr()
 
@@ -439,8 +460,21 @@ def sliding_window_topology(
         section_a, section_b, start_year, end_year, window_years, stride_years,
     )
 
-    citations = citations.copy()
+    # Pre-filter citations to relevant CPC sections ONCE (avoids rescanning
+    # the full 118M-row DataFrame on every window iteration)
+    section_patents = set(
+        cpc_map[cpc_map["cpc_section"].isin([section_a, section_b])]["patent_id"]
+    )
+    citations = citations[
+        citations["citing_id"].isin(section_patents)
+        & citations["cited_id"].isin(section_patents)
+    ].copy()
     citations["citing_date"] = pd.to_datetime(citations["citing_date"])
+
+    logger.info(
+        "Pre-filtered to %d citations for sections (%s, %s)",
+        len(citations), section_a, section_b,
+    )
 
     rows = []
     for year in range(start_year, end_year + 1, stride_years):
