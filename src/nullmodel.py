@@ -41,7 +41,7 @@ def random_cpc_pair_baseline(
     window_years: int = 5,
     year_range: tuple[int, int] = (1985, 2018),
     max_dim: int = 2,
-    max_nodes: int = 50_000,
+    max_nodes: int = 30_000,
     seed: int = 42,
     use_cache: bool = True,
 ) -> pd.DataFrame:
@@ -136,7 +136,7 @@ def matched_null(
     years_before: int = 10,
     exclusion_buffer: int = 3,
     max_dim: int = 2,
-    max_nodes: int = 50_000,
+    max_nodes: int = 30_000,
     seed: int = 42,
     use_cache: bool = True,
 ) -> pd.DataFrame:

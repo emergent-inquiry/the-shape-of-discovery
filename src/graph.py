@@ -209,7 +209,7 @@ def cpc_subgraph_nx(
     cpc_map: pd.DataFrame,
     section_a: str,
     section_b: str,
-    max_nodes: int = 150_000,
+    max_nodes: int = 50_000,
 ) -> nx.Graph:
     """Extract a CPC-pair subgraph as an undirected NetworkX graph.
 
