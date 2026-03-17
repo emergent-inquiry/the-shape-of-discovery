@@ -35,6 +35,16 @@ BULK_TABLES = {
         "description": "CPC classifications per patent",
         "expected_size_mb": 495,
     },
+    "g_application": {
+        "url": f"{S3_BASE}/g_application.tsv.zip",
+        "description": "Application metadata (filing_date, series_code)",
+        "expected_size_mb": 120,
+    },
+    "g_assignee_disambiguated": {
+        "url": f"{S3_BASE}/g_assignee_disambiguated.tsv.zip",
+        "description": "Assignee info (assignee_id, organization, type)",
+        "expected_size_mb": 180,
+    },
 }
 
 # Fallback URLs if S3 goes down after PatentsView migration
