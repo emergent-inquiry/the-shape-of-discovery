@@ -2,7 +2,7 @@
 
 Design decisions:
     - Full graph uses scipy.sparse CSR (NetworkX cannot hold 8M nodes / 100M edges).
-    - Small CPC-pair subgraphs (<50K nodes) are converted to NetworkX for topology.
+    - Small CPC-pair subgraphs (<150K nodes) are converted to NetworkX for topology.
     - Patent IDs are mapped to integer indices via a bijective dict.
 """
 
@@ -209,7 +209,7 @@ def cpc_subgraph_nx(
     cpc_map: pd.DataFrame,
     section_a: str,
     section_b: str,
-    max_nodes: int = 50_000,
+    max_nodes: int = 150_000,
 ) -> nx.Graph:
     """Extract a CPC-pair subgraph as an undirected NetworkX graph.
 

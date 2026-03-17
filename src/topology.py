@@ -64,7 +64,7 @@ def _adjacency_to_distance(G: nx.Graph, max_dist: float = np.inf) -> np.ndarray:
     return dist
 
 
-def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 3) -> sparse.csr_matrix:
+def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 5) -> sparse.csr_matrix:
     """Convert graph to sparse distance matrix, keeping only short-range distances.
 
     For large graphs, computing all-pairs shortest paths is O(n^2).
@@ -122,7 +122,7 @@ def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 3) -> sparse.csr_
 # Graph reduction for tractability
 # ---------------------------------------------------------------------------
 
-def reduce_graph(G: nx.Graph, max_nodes: int = 30_000) -> nx.Graph:
+def reduce_graph(G: nx.Graph, max_nodes: int = 100_000) -> nx.Graph:
     """Reduce graph size while preserving topological structure.
 
     Applies a cascade of reduction strategies:
@@ -168,7 +168,7 @@ def reduce_graph(G: nx.Graph, max_nodes: int = 30_000) -> nx.Graph:
 def compute_persistence(
     G: nx.Graph,
     max_dim: int = 2,
-    max_hops: int = 3,
+    max_hops: int = 5,
     sparse_mode: bool = True,
 ) -> dict:
     """Compute persistent homology of a graph using ripser.
@@ -342,7 +342,7 @@ def persistence_entropy(dgm: np.ndarray) -> float:
 # Topology summary for a single graph
 # ---------------------------------------------------------------------------
 
-def topology_summary(G: nx.Graph, max_dim: int = 2, max_hops: int = 3) -> dict:
+def topology_summary(G: nx.Graph, max_dim: int = 2, max_hops: int = 5) -> dict:
     """Compute a full topological summary of a graph.
 
     Args:
@@ -414,7 +414,7 @@ def sliding_window_topology(
     start_year: int = 1980,
     end_year: int = 2023,
     max_dim: int = 2,
-    max_nodes: int = 30_000,
+    max_nodes: int = 100_000,
     use_cache: bool = True,
 ) -> pd.DataFrame:
     """Compute persistent homology across sliding time windows for a CPC pair.
