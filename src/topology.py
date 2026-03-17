@@ -122,7 +122,7 @@ def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 5) -> sparse.csr_
 # Graph reduction for tractability
 # ---------------------------------------------------------------------------
 
-def reduce_graph(G: nx.Graph, max_nodes: int = 100_000) -> nx.Graph:
+def reduce_graph(G: nx.Graph, max_nodes: int = 50_000) -> nx.Graph:
     """Reduce graph size while preserving topological structure.
 
     Applies a cascade of reduction strategies:
@@ -168,7 +168,7 @@ def reduce_graph(G: nx.Graph, max_nodes: int = 100_000) -> nx.Graph:
 def compute_persistence(
     G: nx.Graph,
     max_dim: int = 2,
-    max_hops: int = 5,
+    max_hops: int = 4,
     sparse_mode: bool = True,
 ) -> dict:
     """Compute persistent homology of a graph using ripser.
@@ -414,7 +414,7 @@ def sliding_window_topology(
     start_year: int = 1980,
     end_year: int = 2023,
     max_dim: int = 2,
-    max_nodes: int = 100_000,
+    max_nodes: int = 50_000,
     use_cache: bool = True,
 ) -> pd.DataFrame:
     """Compute persistent homology across sliding time windows for a CPC pair.
