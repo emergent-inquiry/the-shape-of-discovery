@@ -18,6 +18,7 @@ Design decisions:
 
 from __future__ import annotations
 
+import gc
 import pickle
 from pathlib import Path
 from typing import Optional
@@ -264,10 +265,13 @@ def compute_persistence(
     if sparse_mode and n > 500:
         dist = _adjacency_to_sparse_distance(G, max_hops=max_hops)
         result = ripser(dist, maxdim=max_dim, distance_matrix=True)
+        del dist
     else:
         dist = _adjacency_to_distance(G)
         result = ripser(dist, maxdim=max_dim, distance_matrix=True)
+        del dist
 
+    gc.collect()
     log_memory(f"After persistence ({n} nodes)")
 
     return {
@@ -695,17 +699,23 @@ def sliding_window_topology(
             )
             if sg.n_nodes < 3:
                 logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, sg.n_nodes)
+                del window_cites, sg
                 continue
             summary = topology_summary_directed(sg.adj, max_dim=max_dim, max_nodes=max_nodes)
+            del sg
         else:
             G = cpc_subgraph_nx(
                 window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes,
             )
             if G.number_of_nodes() < 3:
                 logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, G.number_of_nodes())
+                del window_cites, G
                 continue
             G = reduce_graph(G, max_nodes=max_nodes)
             summary = topology_summary(G, max_dim=max_dim)
+            del G
+
+        del window_cites
 
         summary["year"] = year
         rows.append(summary)
@@ -715,6 +725,9 @@ def sliding_window_topology(
             year, summary["n_nodes"], summary["n_edges"],
             summary["beta_1"], summary["persistence_entropy"],
         )
+
+        # Free memory from ripser/flagser intermediates before next window
+        gc.collect()
 
     result = pd.DataFrame(rows)
 
