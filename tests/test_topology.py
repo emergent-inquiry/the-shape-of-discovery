@@ -1,20 +1,226 @@
-"""Unit tests for persistent homology computations on synthetic graphs."""
+"""Unit tests for co-citation distance matrix topology pipeline."""
 
 import numpy as np
-import networkx as nx
+import pandas as pd
 import pytest
-from scipy import sparse
 
 from src.topology import (
+    build_cocitation_matrix,
+    cocitation_to_distance,
     compute_persistence,
-    compute_persistence_flagser,
     betti_numbers,
     persistence_entropy,
-    topology_summary,
-    topology_summary_directed,
-    reduce_graph,
-    reduce_sparse_digraph,
+    max_persistence,
+    n_long_lived_features,
+    PRIORITY_PAIRS,
 )
+
+
+# ---------------------------------------------------------------------------
+# Fixtures: synthetic citation data
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def synthetic_data():
+    """Create a small synthetic citations + cpc_map dataset."""
+    # 6 patents across 3 CPC subclasses in 2 sections
+    cpc_map = pd.DataFrame({
+        "patent_id": ["P1", "P2", "P3", "P4", "P5", "P6"],
+        "cpc_section": ["A", "A", "C", "C", "A", "C"],
+        "cpc_class": ["A01", "A01", "C07", "C12", "A61", "C07"],
+        "cpc_subclass": ["A01B", "A01B", "C07K", "C12N", "A61K", "C07K"],
+    })
+
+    citations = pd.DataFrame({
+        "citing_id": ["P1", "P2", "P3", "P4", "P5", "P6", "P1", "P3"],
+        "cited_id":  ["P3", "P4", "P5", "P1", "P6", "P2", "P6", "P2"],
+        "citing_year": [2010, 2010, 2011, 2011, 2012, 2012, 2010, 2011],
+    })
+
+    return citations, cpc_map
+
+
+# ---------------------------------------------------------------------------
+# TestBuildCocitationMatrix
+# ---------------------------------------------------------------------------
+
+class TestBuildCocitationMatrix:
+    """Test co-citation matrix construction."""
+
+    def test_basic_counts(self, synthetic_data):
+        """Verify that co-citation counts match expected values."""
+        citations, cpc_map = synthetic_data
+        cocite_df, labels = build_cocitation_matrix(
+            citations, cpc_map, start_year=2010, end_year=2012, level="subclass"
+        )
+        assert not cocite_df.empty
+        assert len(labels) > 0
+        # Matrix should be square
+        assert cocite_df.shape[0] == cocite_df.shape[1]
+        # Total citations should equal number of rows in citations that have CPC mappings
+        assert cocite_df.values.sum() > 0
+
+    def test_empty_window(self, synthetic_data):
+        """Window with no citations should return empty DataFrame."""
+        citations, cpc_map = synthetic_data
+        cocite_df, labels = build_cocitation_matrix(
+            citations, cpc_map, start_year=2020, end_year=2025, level="subclass"
+        )
+        assert cocite_df.empty
+        assert labels == []
+
+    def test_level_section(self, synthetic_data):
+        """Section-level should produce a smaller matrix."""
+        citations, cpc_map = synthetic_data
+        cocite_df, labels = build_cocitation_matrix(
+            citations, cpc_map, start_year=2010, end_year=2012, level="section"
+        )
+        # Only 2 sections: A and C
+        assert len(labels) <= 2
+
+    def test_invalid_level(self, synthetic_data):
+        """Invalid CPC level should raise ValueError."""
+        citations, cpc_map = synthetic_data
+        with pytest.raises(ValueError, match="not found"):
+            build_cocitation_matrix(
+                citations, cpc_map, start_year=2010, end_year=2012, level="invalid"
+            )
+
+    def test_requires_citing_year(self, synthetic_data):
+        """Should fail if citing_year column is missing."""
+        citations, cpc_map = synthetic_data
+        citations_no_year = citations.drop(columns=["citing_year"])
+        with pytest.raises(KeyError):
+            build_cocitation_matrix(
+                citations_no_year, cpc_map, start_year=2010, end_year=2012
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestCocitationToDistance
+# ---------------------------------------------------------------------------
+
+class TestCocitationToDistance:
+    """Test distance matrix conversion."""
+
+    def test_symmetric_output(self):
+        """Distance matrix should be symmetric."""
+        matrix = np.array([
+            [0, 10, 5],
+            [8, 0, 3],
+            [2, 7, 0],
+        ], dtype=float)
+        dist, mask = cocitation_to_distance(matrix)
+        assert dist.shape[0] == dist.shape[1]
+        np.testing.assert_array_almost_equal(dist, dist.T)
+
+    def test_diagonal_zero(self):
+        """Diagonal of distance matrix should be exactly zero."""
+        matrix = np.array([
+            [0, 10, 5],
+            [8, 0, 3],
+            [2, 7, 0],
+        ], dtype=float)
+        dist, mask = cocitation_to_distance(matrix)
+        np.testing.assert_array_equal(np.diag(dist), 0)
+
+    def test_nonnegative(self):
+        """All distances should be non-negative."""
+        matrix = np.random.rand(10, 10) * 100
+        dist, mask = cocitation_to_distance(matrix)
+        assert (dist >= 0).all()
+
+    def test_identical_rows_small_distance(self):
+        """Identical citation patterns should have small distance after symmetrization."""
+        matrix = np.array([
+            [0, 10, 5],
+            [0, 10, 5],  # identical to row 0
+            [3, 0, 7],
+        ], dtype=float)
+        dist, mask = cocitation_to_distance(matrix)
+        # After symmetrization (A+A^T), rows 0 and 1 won't be exactly identical
+        # because column contributions differ, but should be closer than others
+        assert dist[0, 1] < dist[0, 2]
+
+    def test_too_few_active(self):
+        """Fewer than 3 active classes should return empty array."""
+        matrix = np.array([
+            [0, 1],
+            [1, 0],
+        ], dtype=float)
+        dist, mask = cocitation_to_distance(matrix)
+        assert dist.size == 0
+
+    def test_zero_rows_filtered(self):
+        """Zero rows should be filtered via active_mask."""
+        matrix = np.array([
+            [0, 10, 5, 0],
+            [8, 0, 3, 0],
+            [2, 7, 0, 0],
+            [0, 0, 0, 0],  # zero row
+        ], dtype=float)
+        dist, mask = cocitation_to_distance(matrix)
+        # 3 active classes, 1 filtered
+        assert dist.shape[0] == 3
+        assert mask.sum() == 3
+        assert not mask[3]
+
+
+# ---------------------------------------------------------------------------
+# TestComputePersistence
+# ---------------------------------------------------------------------------
+
+class TestComputePersistence:
+    """Test Vietoris-Rips persistence on known distance matrices."""
+
+    def test_equilateral_triangle(self):
+        """3 equidistant points: Rips fills triangle immediately, so H1 is trivial."""
+        dist = np.array([
+            [0, 1, 1],
+            [1, 0, 1],
+            [1, 1, 0],
+        ], dtype=float)
+        diagrams = compute_persistence(dist, max_dim=1)
+        assert len(diagrams) >= 2
+        # H0: 3 points merge into 1 component
+        assert len(diagrams[0]) >= 1
+        # H1: In Rips, all 3 edges appear at r=1 and the 2-simplex fills immediately,
+        # so no persistent H1. This is correct behavior.
+        # (A square with diagonals longer would produce persistent H1.)
+
+    def test_square_has_h1(self):
+        """A square (4 points, diagonals longer) should have a persistent H1 feature."""
+        # Square: adjacent distance=1, diagonal distance=sqrt(2)
+        d = np.sqrt(2)
+        dist = np.array([
+            [0, 1, d, 1],
+            [1, 0, 1, d],
+            [d, 1, 0, 1],
+            [1, d, 1, 0],
+        ], dtype=float)
+        diagrams = compute_persistence(dist, max_dim=1)
+        assert len(diagrams) >= 2
+        # H1: loop born at r=1 (4 edges), dies at r=sqrt(2) (diagonals fill it)
+        assert len(diagrams[1]) >= 1
+        persistence = diagrams[1][:, 1] - diagrams[1][:, 0]
+        finite = persistence[np.isfinite(persistence)]
+        assert len(finite) >= 1
+        assert finite.max() > 0.1
+
+    def test_collinear_points(self):
+        """Collinear points should have no H1 features."""
+        dist = np.array([
+            [0, 1, 2, 3],
+            [1, 0, 1, 2],
+            [2, 1, 0, 1],
+            [3, 2, 1, 0],
+        ], dtype=float)
+        diagrams = compute_persistence(dist, max_dim=1)
+        # H1 should be empty or have only trivial features
+        if len(diagrams[1]) > 0:
+            persistence = diagrams[1][:, 1] - diagrams[1][:, 0]
+            finite = persistence[np.isfinite(persistence)]
+            assert np.all(finite < 0.01)
 
 
 # ---------------------------------------------------------------------------
@@ -22,65 +228,29 @@ from src.topology import (
 # ---------------------------------------------------------------------------
 
 class TestBettiNumbers:
-    """Test Betti number computation on graphs with known topology."""
+    """Test Betti number extraction from diagrams."""
 
-    def test_disconnected_components(self):
-        """Two disconnected cliques: β₀ should show 2 components."""
-        G = nx.disjoint_union(nx.complete_graph(4), nx.complete_graph(4))
-        result = compute_persistence(G, max_dim=0)
-        dgms = result["dgms"]
-        # H0 should have features; 2 components means one infinite feature per component
-        # ripser reports all H0 features including those that merge
-        assert len(dgms[0]) >= 2
+    def test_basic(self):
+        """Simple diagrams with known counts."""
+        dgm0 = np.array([[0, np.inf], [0, 0.5]])  # 2 H0 features (1 inf, 1 finite)
+        dgm1 = np.array([[0.5, 1.0], [0.6, 0.9]])  # 2 H1 features
+        b0, b1, b2 = betti_numbers([dgm0, dgm1])
+        assert b0 == 2
+        assert b1 == 2
+        assert b2 == 0  # no H2 diagrams
 
-    def test_cycle_graph(self):
-        """A cycle graph should have β₁ = 1 (one independent loop)."""
-        G = nx.cycle_graph(8)
-        result = compute_persistence(G, max_dim=1)
-        dgms = result["dgms"]
-        # H1 should have exactly 1 feature (the loop)
-        assert len(dgms[1]) == 1
+    def test_with_threshold(self):
+        """Threshold should filter out short-lived features."""
+        dgm0 = np.array([[0, np.inf], [0, 0.1]])
+        dgm1 = np.array([[0.5, 1.5], [0.6, 0.7]])  # persistence 1.0 and 0.1
+        b0, b1, b2 = betti_numbers([dgm0, dgm1], threshold=0.5)
+        assert b0 == 1  # only the infinite one
+        assert b1 == 1  # only the long-lived one
 
-    def test_complete_graph_no_h1(self):
-        """A complete graph on 4 nodes should have β₁ = 0 (all loops are filled)."""
-        G = nx.complete_graph(4)
-        result = compute_persistence(G, max_dim=1, sparse_mode=False)
-        dgms = result["dgms"]
-        # All H1 features should die immediately (be trivial)
-        if len(dgms[1]) > 0:
-            lifetimes = dgms[1][:, 1] - dgms[1][:, 0]
-            finite_lifetimes = lifetimes[np.isfinite(lifetimes)]
-            # All lifetimes should be very small (triangles fill immediately)
-            assert np.all(finite_lifetimes < 0.5)
-
-    def test_empty_graph(self):
-        """Empty graph should return β₀ = 0, β₁ = 0."""
-        G = nx.Graph()
-        summary = topology_summary(G, max_dim=1)
-        assert summary["beta_0"] == 0
-        assert summary["beta_1"] == 0
-        assert summary["n_nodes"] == 0
-
-    def test_single_node(self):
-        """Single node: β₀ = 1, β₁ = 0."""
-        G = nx.Graph()
-        G.add_node(0)
-        result = compute_persistence(G, max_dim=1)
-        assert result["n_nodes"] == 1
-        # H0 should have one feature
-        assert len(result["dgms"][0]) == 1
-
-    def test_two_triangles_sharing_edge(self):
-        """Two triangles sharing an edge have β₁ = 0 (no independent loops)."""
-        G = nx.Graph()
-        G.add_edges_from([(0, 1), (1, 2), (0, 2), (1, 3), (2, 3)])
-        result = compute_persistence(G, max_dim=1, sparse_mode=False)
-        dgms = result["dgms"]
-        # Both triangles are filled, so no persistent H1 features
-        if len(dgms[1]) > 0:
-            lifetimes = dgms[1][:, 1] - dgms[1][:, 0]
-            finite_lifetimes = lifetimes[np.isfinite(lifetimes)]
-            assert np.all(finite_lifetimes < 0.5)
+    def test_empty_diagrams(self):
+        """Empty diagrams should return all zeros."""
+        b0, b1, b2 = betti_numbers([np.empty((0, 2)), np.empty((0, 2))])
+        assert (b0, b1, b2) == (0, 0, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -91,184 +261,86 @@ class TestPersistenceEntropy:
     """Test persistence entropy computation."""
 
     def test_single_feature(self):
-        """Single persistent feature should have entropy 0."""
-        dgm = np.array([[0.0, 1.0]])
+        """Single finite feature should have entropy 0."""
+        dgm = [np.array([[0.0, 1.0]])]
         assert persistence_entropy(dgm) == pytest.approx(0.0, abs=1e-10)
 
     def test_uniform_features(self):
         """Equal-lifetime features should give log2(n) entropy."""
         n = 4
-        dgm = np.array([[0.0, 1.0]] * n)
+        dgm = [np.array([[0.0, 1.0]] * n)]
         expected = np.log2(n)
         assert persistence_entropy(dgm) == pytest.approx(expected, abs=1e-6)
 
     def test_empty_diagram(self):
         """Empty diagram should have entropy 0."""
-        dgm = np.empty((0, 2))
+        dgm = [np.empty((0, 2))]
         assert persistence_entropy(dgm) == 0.0
 
     def test_infinite_features_excluded(self):
         """Infinite features should not contribute to entropy."""
-        dgm = np.array([[0.0, np.inf], [0.0, 1.0]])
+        dgm = [np.array([[0.0, np.inf], [0.0, 1.0]])]
         # Only one finite feature → entropy = 0
         assert persistence_entropy(dgm) == pytest.approx(0.0, abs=1e-10)
 
 
 # ---------------------------------------------------------------------------
-# TestReduceGraph
+# TestMaxPersistence
 # ---------------------------------------------------------------------------
 
-class TestReduceGraph:
-    """Test graph reduction for tractability."""
+class TestMaxPersistence:
+    """Test max persistence extraction."""
 
-    def test_small_graph_unchanged(self):
-        """Graph smaller than max_nodes should pass through unchanged."""
-        G = nx.complete_graph(10)
-        reduced = reduce_graph(G, max_nodes=100)
-        assert reduced.number_of_nodes() == 10
+    def test_basic(self):
+        """Should return the largest finite persistence."""
+        dgm0 = np.array([[0, 0.5]])
+        dgm1 = np.array([[0.1, 0.8], [0.2, 1.5]])  # max persistence = 1.3
+        result = max_persistence([dgm0, dgm1], dim=1)
+        assert result == pytest.approx(1.3, abs=1e-10)
 
-    def test_large_graph_reduced(self):
-        """Graph larger than max_nodes should be reduced."""
-        G = nx.barabasi_albert_graph(200, 3, seed=42)
-        reduced = reduce_graph(G, max_nodes=50)
-        assert reduced.number_of_nodes() <= 50
-
-    def test_leaves_removed_first(self):
-        """Degree-1 nodes should be removed before subsampling."""
-        # Star graph: 1 hub + many leaves
-        G = nx.star_graph(100)
-        reduced = reduce_graph(G, max_nodes=50)
-        # All leaves should be removed, only hub remains if that's enough
-        assert reduced.number_of_nodes() <= 50
+    def test_empty_dimension(self):
+        """Missing dimension should return 0."""
+        dgm0 = np.array([[0, 0.5]])
+        result = max_persistence([dgm0], dim=1)
+        assert result == 0.0
 
 
 # ---------------------------------------------------------------------------
-# TestTopologySummary
+# TestNLongLivedFeatures
 # ---------------------------------------------------------------------------
 
-class TestTopologySummary:
-    """Test the full topology summary pipeline."""
+class TestNLongLivedFeatures:
+    """Test long-lived feature counting."""
 
-    def test_summary_keys(self):
-        """Summary should contain all expected keys."""
-        G = nx.cycle_graph(6)
-        summary = topology_summary(G, max_dim=1)
-        expected_keys = {
-            "beta_0", "beta_1", "beta_2", "persistence_entropy",
-            "max_persistence", "n_long_lived_features", "n_nodes", "n_edges",
-        }
-        assert set(summary.keys()) == expected_keys
+    def test_basic(self):
+        """Count features above 90th percentile."""
+        # 10 features, persistence = 0.1, 0.2, ..., 1.0
+        dgm1 = np.array([[0, p] for p in np.arange(0.1, 1.1, 0.1)])
+        count = n_long_lived_features([np.empty((0, 2)), dgm1], dim=1, percentile=90)
+        # 90th percentile of [0.1..1.0] = 0.9, only 1.0 exceeds it
+        assert count == 1
 
-    def test_cycle_summary(self):
-        """Cycle graph summary should show β₁ = 1."""
-        G = nx.cycle_graph(10)
-        summary = topology_summary(G, max_dim=1)
-        assert summary["beta_1"] >= 1
-        assert summary["n_nodes"] == 10
-        assert summary["n_edges"] == 10
+    def test_empty(self):
+        """Empty diagram should return 0."""
+        count = n_long_lived_features([np.empty((0, 2)), np.empty((0, 2))], dim=1)
+        assert count == 0
 
 
 # ---------------------------------------------------------------------------
-# TestFlagserBackend
+# TestPriorityPairs
 # ---------------------------------------------------------------------------
 
-class TestFlagserBackend:
-    """Test directed flag complex persistence via pyflagser."""
+class TestPriorityPairs:
+    """Test the PRIORITY_PAIRS constant."""
 
-    def test_directed_cycle(self):
-        """A directed cycle 0→1→2→3→4→0 should have β₁ = 1."""
-        n = 5
-        rows = [0, 1, 2, 3, 4]
-        cols = [1, 2, 3, 4, 0]
-        adj = sparse.csr_matrix(
-            (np.ones(n, dtype=np.int8), (rows, cols)), shape=(n, n)
-        )
-        result = compute_persistence_flagser(adj, max_dim=1, directed=True)
-        bettis = betti_numbers(result["dgms"])
-        assert bettis[1] >= 1, f"Expected β₁ >= 1 for directed cycle, got {bettis[1]}"
+    def test_count(self):
+        """Should have exactly 10 priority pairs."""
+        assert len(PRIORITY_PAIRS) == 10
 
-    def test_acyclic_dag(self):
-        """A DAG (no directed cycles) should have β₁ = 0."""
-        # Chain: 0→1→2→3→4 (no cycles)
-        rows = [0, 1, 2, 3]
-        cols = [1, 2, 3, 4]
-        adj = sparse.csr_matrix(
-            (np.ones(4, dtype=np.int8), (rows, cols)), shape=(5, 5)
-        )
-        result = compute_persistence_flagser(adj, max_dim=1, directed=True)
-        bettis = betti_numbers(result["dgms"])
-        # No directed cycles → no H₁ features
-        assert bettis[1] == 0, f"Expected β₁ = 0 for DAG, got {bettis[1]}"
-
-    def test_empty_graph(self):
-        """Empty adjacency should return empty diagrams."""
-        adj = sparse.csr_matrix((0, 0), dtype=np.int8)
-        result = compute_persistence_flagser(adj, max_dim=1)
-        assert result["n_nodes"] == 0
-        assert len(result["dgms"]) == 2
-        assert len(result["dgms"][0]) == 0
-
-    def test_single_node(self):
-        """Single node should have β₀ = 1."""
-        adj = sparse.csr_matrix((1, 1), dtype=np.int8)
-        result = compute_persistence_flagser(adj, max_dim=1)
-        assert result["n_nodes"] == 1
-        assert len(result["dgms"][0]) == 1
-
-    def test_output_format(self):
-        """Flagser output should have same dict keys as ripser."""
-        n = 5
-        rows = [0, 1, 2, 3, 4]
-        cols = [1, 2, 3, 4, 0]
-        adj = sparse.csr_matrix(
-            (np.ones(n, dtype=np.int8), (rows, cols)), shape=(n, n)
-        )
-        result = compute_persistence_flagser(adj, max_dim=1)
-        assert "dgms" in result
-        assert "n_nodes" in result
-        assert "n_edges" in result
-        assert len(result["dgms"]) == 2  # dim 0 and dim 1
-        for dgm in result["dgms"]:
-            assert isinstance(dgm, np.ndarray)
-            if len(dgm) > 0:
-                assert dgm.shape[1] == 2
-
-    def test_topology_summary_directed_keys(self):
-        """Directed summary should have same keys as undirected plus 'backend'."""
-        n = 5
-        rows = [0, 1, 2, 3, 4]
-        cols = [1, 2, 3, 4, 0]
-        adj = sparse.csr_matrix(
-            (np.ones(n, dtype=np.int8), (rows, cols)), shape=(n, n)
-        )
-        summary = topology_summary_directed(adj, max_dim=1, max_nodes=1000)
-        expected_keys = {
-            "beta_0", "beta_1", "beta_2", "persistence_entropy",
-            "max_persistence", "n_long_lived_features", "n_nodes", "n_edges",
-            "backend",
-        }
-        assert set(summary.keys()) == expected_keys
-        assert summary["backend"] == "flagser"
-
-
-# ---------------------------------------------------------------------------
-# TestReduceSparseDigraph
-# ---------------------------------------------------------------------------
-
-class TestReduceSparseDigraph:
-    """Test sparse directed graph reduction."""
-
-    def test_small_graph_unchanged(self):
-        """Graph smaller than max_nodes should pass through unchanged."""
-        adj = sparse.csr_matrix(np.eye(5, dtype=np.int8))
-        reduced, kept = reduce_sparse_digraph(adj, max_nodes=100)
-        assert reduced.shape[0] == 5
-
-    def test_large_graph_reduced(self):
-        """Graph larger than max_nodes should be reduced."""
-        n = 200
-        G = nx.barabasi_albert_graph(n, 3, seed=42)
-        adj = nx.to_scipy_sparse_array(G, format="csr")
-        reduced, kept = reduce_sparse_digraph(adj, max_nodes=50)
-        assert reduced.shape[0] <= 50
-        assert len(kept) == reduced.shape[0]
+    def test_format(self):
+        """Each pair should be a tuple of two single-character CPC section codes."""
+        for pair in PRIORITY_PAIRS:
+            assert isinstance(pair, tuple)
+            assert len(pair) == 2
+            assert len(pair[0]) == 1 and pair[0].isalpha()
+            assert len(pair[1]) == 1 and pair[1].isalpha()

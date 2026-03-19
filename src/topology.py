@@ -1,741 +1,679 @@
-"""Persistent homology computation for the patent citation network.
+"""
+Topological analysis of the patent citation knowledge space.
 
-This is the novel core of the project. Nobody has applied persistent homology
-to the patent citation graph to detect topological precursors of technological
-breakthroughs.
+APPROACH: Instead of computing persistent homology on the raw citation graph
+(intractable — 20K+ node clique complexes have billions of simplices), we
+compute it on the KNOWLEDGE SPACE defined by CPC subclass co-citation patterns.
 
-Design decisions:
-    - Work on CPC section-pair subgraphs, never the full 8M-node graph.
-    - Two backends: ripser (Vietoris-Rips on undirected graphs) and
-      pyflagser (directed flag complex on directed citation graphs).
-    - pyflagser is preferred: it preserves citation direction and skips the
-      expensive distance matrix computation that causes OOM on large subgraphs.
-    - Fall back to giotto-tda if ripser fails on specific inputs.
-    - Tractability cascade: degree pruning → landmark subsampling → alternative filtration.
-    - All expensive results are cached to data/topology_cache/ as pickle.
-    - Cache keys include backend name to prevent cross-contamination.
+Each CPC subclass (~260 total) becomes a point. The distance between two
+subclasses is defined by how differently they cite other subclasses
+(1 - cosine_similarity of their citation vectors). Persistent homology on
+this ~260-point distance matrix is trivial (seconds per window) and answers
+a better question: "What is the shape of the knowledge landscape, and how
+does it change over time?"
+
+β₀ dropping = previously disconnected fields merging in citation space
+β₁ appearing = circular citation flows forming between field clusters
+persistence entropy = overall topological complexity of the knowledge space
+
+Conceived by Claude (Opus 4.6, Anthropic). Implementation by Claude Code.
 """
 
-from __future__ import annotations
-
+import logging
 import gc
-import pickle
 from pathlib import Path
 from typing import Optional
 
-import networkx as nx
 import numpy as np
 import pandas as pd
-from scipy import sparse
-from scipy.sparse.csgraph import shortest_path
+from scipy.spatial.distance import squareform, pdist
+from scipy.sparse import csr_matrix
 
-from src.graph import cpc_subgraph_nx, cpc_subgraph_directed, SparseGraph
-from src.utils import DATA_DIR, get_logger, log_memory, timer
-
-logger = get_logger(__name__)
-
-TOPOLOGY_CACHE = DATA_DIR / "topology_cache"
-
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Distance matrix construction
+# Core: Co-citation matrix construction
 # ---------------------------------------------------------------------------
 
-def _adjacency_to_distance(G: nx.Graph, max_dist: float = np.inf) -> np.ndarray:
-    """Convert an undirected graph to a distance matrix for ripser.
+def build_cocitation_matrix(
+    citations_df: pd.DataFrame,
+    cpc_map: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+    level: str = "subclass",
+) -> tuple[pd.DataFrame, list[str]]:
+    """Build a CPC co-citation matrix for a given time window.
 
-    Uses shortest-path distance. Disconnected pairs get max_dist.
+    For each citation (A cites B), look up the CPC classifications of A and B.
+    Increment the co-citation count for each (cpc_of_A, cpc_of_B) pair.
+    The result is a square matrix where entry (i, j) counts how often
+    patents in CPC class i cite patents in CPC class j.
 
     Args:
-        G: Undirected NetworkX graph.
-        max_dist: Value for disconnected pairs. Use np.inf for ripser
-            (it ignores infinite entries in sparse mode).
+        citations_df: DataFrame with columns [citing_id, cited_id, citing_date].
+        cpc_map: DataFrame with columns [patent_id, cpc_section, cpc_class, cpc_subclass].
+        start_year: Start of time window (inclusive).
+        end_year: End of time window (inclusive).
+        level: CPC granularity — "section" (8 categories), "class" (~130),
+               or "subclass" (~260). Default "subclass".
 
     Returns:
-        Square distance matrix as a numpy array.
+        Tuple of (co-citation DataFrame indexed by CPC labels, list of CPC labels).
     """
-    adj = nx.to_scipy_sparse_array(G, format="csr")
+    cpc_col = f"cpc_{level}"
+    if cpc_col not in cpc_map.columns:
+        raise ValueError(f"Column '{cpc_col}' not found in cpc_map. Available: {list(cpc_map.columns)}")
 
-    # Shortest-path distances on the unweighted graph
-    dist = shortest_path(adj, directed=False, unweighted=True)
+    # Filter citations to time window
+    window_mask = (
+        (citations_df["citing_year"] >= start_year) &
+        (citations_df["citing_year"] <= end_year)
+    )
+    window_citations = citations_df.loc[window_mask, ["citing_id", "cited_id"]].copy()
 
-    # Replace 0 (self-loops) with 0, and inf stays as inf
-    np.fill_diagonal(dist, 0.0)
+    if len(window_citations) == 0:
+        logger.warning(f"No citations in window {start_year}-{end_year}")
+        return pd.DataFrame(), []
 
-    # Cap at max_dist for computational tractability
-    if np.isfinite(max_dist):
-        dist = np.minimum(dist, max_dist)
+    logger.info(f"Window {start_year}-{end_year}: {len(window_citations):,} citations")
 
-    return dist
+    # Get primary CPC label per patent (take the first one if multiple)
+    patent_to_cpc = (
+        cpc_map.groupby("patent_id")[cpc_col]
+        .first()
+        .to_dict()
+    )
+
+    # Map citing and cited patents to their CPC labels
+    window_citations["citing_cpc"] = window_citations["citing_id"].map(patent_to_cpc)
+    window_citations["cited_cpc"] = window_citations["cited_id"].map(patent_to_cpc)
+
+    # Drop rows where either patent has no CPC mapping
+    window_citations = window_citations.dropna(subset=["citing_cpc", "cited_cpc"])
+
+    if len(window_citations) == 0:
+        logger.warning(f"No citations with valid CPC mappings in {start_year}-{end_year}")
+        return pd.DataFrame(), []
+
+    # Count co-citations
+    cocite_counts = (
+        window_citations
+        .groupby(["citing_cpc", "cited_cpc"])
+        .size()
+        .reset_index(name="count")
+    )
+
+    # Get all unique CPC labels in this window
+    all_labels = sorted(
+        set(cocite_counts["citing_cpc"].unique()) |
+        set(cocite_counts["cited_cpc"].unique())
+    )
+
+    # Build square matrix
+    label_to_idx = {label: i for i, label in enumerate(all_labels)}
+    n = len(all_labels)
+    matrix = np.zeros((n, n), dtype=np.float64)
+
+    for _, row in cocite_counts.iterrows():
+        i = label_to_idx[row["citing_cpc"]]
+        j = label_to_idx[row["cited_cpc"]]
+        matrix[i, j] = row["count"]
+
+    cocite_df = pd.DataFrame(matrix, index=all_labels, columns=all_labels)
+
+    logger.info(f"  Co-citation matrix: {n}x{n}, {int(matrix.sum()):,} total citations")
+
+    return cocite_df, all_labels
 
 
-def _adjacency_to_sparse_distance(G: nx.Graph, max_hops: int = 5) -> sparse.csr_matrix:
-    """Convert graph to sparse distance matrix, keeping only short-range distances.
+def cocitation_to_distance(cocite_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Convert a co-citation matrix to a distance matrix using cosine distance.
 
-    For large graphs, computing all-pairs shortest paths is O(n^2).
-    This function only keeps distances up to max_hops, making the
-    distance matrix sparse and tractable for ripser.
-
-    Uses vectorized sparse operations instead of Python loops for performance.
+    Each row of the co-citation matrix is treated as a vector describing
+    how a CPC class cites other classes. The distance between two classes
+    is 1 - cosine_similarity(row_i, row_j).
 
     Args:
-        G: Undirected NetworkX graph.
-        max_hops: Maximum distance to keep.
+        cocite_matrix: Square numpy array of co-citation counts.
 
     Returns:
-        Sparse CSR distance matrix.
+        Tuple of (distance matrix, boolean active_mask).
+        Distance: 0 = identical citation patterns, 1 = orthogonal.
+        Returns (empty array, mask) if fewer than 3 active classes.
     """
-    adj = nx.to_scipy_sparse_array(G, format="csr", dtype=np.float64)
-    n = adj.shape[0]
+    # Symmetrize: use (A cites B) + (B cites A) as the undirected co-citation
+    sym = cocite_matrix + cocite_matrix.T
 
-    # Binary adjacency (no weights)
-    adj_bin = (adj > 0).astype(np.float64)
-    adj_bin.setdiag(0)
-    adj_bin.eliminate_zeros()
+    # Handle zero rows (classes with no citations in this window)
+    row_sums = sym.sum(axis=1)
+    nonzero_mask = row_sums > 0
 
-    # Initialize distance with hop-1 neighbors
-    dist = adj_bin.copy()
-    # Track which pairs have been assigned a distance (int8 to avoid bool underflow)
-    reached = adj_bin.astype(np.int8)
+    if nonzero_mask.sum() < 3:
+        logger.warning("Fewer than 3 active CPC classes in window — skipping")
+        return np.array([]), nonzero_mask
 
-    current_power = adj_bin.copy()
-    for hop in range(2, max_hops + 1):
-        current_power = current_power @ adj_bin
-        current_power.setdiag(0)
+    # Compute cosine distances only for active classes
+    active_matrix = sym[nonzero_mask][:, nonzero_mask]
 
-        # New pairs: reachable at this hop but not yet discovered
-        # Cast to int8 before subtraction to avoid bool underflow (False - True wraps)
-        new_pairs = (current_power > 0).astype(np.int8) - (reached > 0).astype(np.int8)
-        new_pairs = new_pairs.multiply(new_pairs > 0)  # Clip negatives
-        new_pairs.eliminate_zeros()  # Remove explicit zeros before setting data
+    # Normalize rows to unit vectors
+    norms = np.linalg.norm(active_matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1  # prevent division by zero
+    normalized = active_matrix / norms
 
-        if new_pairs.nnz == 0:
-            break
+    # Cosine similarity → distance
+    cosine_sim = normalized @ normalized.T
+    cosine_sim = np.clip(cosine_sim, -1, 1)  # numerical stability
+    distance = 1.0 - cosine_sim
 
-        # Assign distance = hop to newly discovered pairs only
-        new_dist = new_pairs.astype(np.float64)
-        new_dist.data[:] = float(hop)
-        dist = dist + new_dist
+    # Ensure diagonal is exactly 0 and matrix is symmetric
+    np.fill_diagonal(distance, 0)
+    distance = (distance + distance.T) / 2
 
-        # Update reached mask
-        reached = reached + new_pairs.astype(np.int8)
+    # Ensure non-negative (numerical precision)
+    distance = np.maximum(distance, 0)
 
-    return dist.tocsr()
+    return distance, nonzero_mask
 
 
 # ---------------------------------------------------------------------------
-# Graph reduction for tractability
-# ---------------------------------------------------------------------------
-
-def reduce_graph(G: nx.Graph, max_nodes: int = 30_000) -> nx.Graph:
-    """Reduce graph size while preserving topological structure.
-
-    Applies a cascade of reduction strategies:
-        1. Remove degree-1 nodes (leaves don't contribute to cycles/voids)
-        2. If still too large, keep highest-degree nodes (maxmin landmark)
-
-    Args:
-        G: Input graph.
-        max_nodes: Target maximum node count.
-
-    Returns:
-        Reduced graph (may be the same object if already small enough).
-    """
-    if G.number_of_nodes() <= max_nodes:
-        return G
-
-    # Step 1: Remove leaves (degree-1 nodes)
-    leaves = [n for n, d in G.degree() if d <= 1]
-    if leaves:
-        G = G.copy()
-        G.remove_nodes_from(leaves)
-        logger.info(
-            "Removed %d leaves, %d nodes remaining",
-            len(leaves), G.number_of_nodes(),
-        )
-
-    if G.number_of_nodes() <= max_nodes:
-        return G
-
-    # Step 2: Keep highest-degree nodes
-    degrees = dict(G.degree())
-    sorted_nodes = sorted(degrees, key=degrees.get, reverse=True)[:max_nodes]
-    G = G.subgraph(sorted_nodes).copy()
-    logger.info("Subsampled to %d highest-degree nodes", G.number_of_nodes())
-
-    return G
-
-
-def reduce_sparse_digraph(
-    adj: sparse.csr_matrix,
-    max_nodes: int = 30_000,
-) -> tuple[sparse.csr_matrix, np.ndarray]:
-    """Reduce a directed sparse adjacency matrix while preserving topology.
-
-    Same cascade as ``reduce_graph()`` but operates on sparse matrices directly,
-    avoiding NetworkX overhead. Used by the flagser backend.
-
-    Args:
-        adj: Sparse directed adjacency matrix.
-        max_nodes: Target maximum node count.
-
-    Returns:
-        Tuple of (reduced adjacency, array of kept original indices).
-    """
-    n = adj.shape[0]
-    kept = np.arange(n)
-
-    if n <= max_nodes:
-        return adj, kept
-
-    # Step 1: Remove leaves (total degree <= 1)
-    in_deg = np.array(adj.sum(axis=0)).flatten()
-    out_deg = np.array(adj.sum(axis=1)).flatten()
-    total_deg = in_deg + out_deg
-    non_leaf = total_deg > 1
-
-    if non_leaf.sum() < n:
-        idx = np.where(non_leaf)[0]
-        adj = adj[idx][:, idx]
-        kept = kept[idx]
-        logger.info(
-            "Removed %d leaves, %d nodes remaining",
-            n - len(idx), len(idx),
-        )
-
-    if adj.shape[0] <= max_nodes:
-        return adj, kept
-
-    # Step 2: Keep highest-degree nodes
-    in_deg = np.array(adj.sum(axis=0)).flatten()
-    out_deg = np.array(adj.sum(axis=1)).flatten()
-    total_deg = in_deg + out_deg
-    top_idx = np.argsort(total_deg)[-max_nodes:]
-    adj = adj[top_idx][:, top_idx]
-    kept = kept[top_idx]
-    logger.info("Subsampled to %d highest-degree nodes", adj.shape[0])
-
-    return adj, kept
-
-
-# ---------------------------------------------------------------------------
-# Persistent homology
+# Persistent homology computation
 # ---------------------------------------------------------------------------
 
 def compute_persistence(
-    G: nx.Graph,
+    distance_matrix: np.ndarray,
     max_dim: int = 2,
-    max_hops: int = 4,
-    sparse_mode: bool = True,
-) -> dict:
-    """Compute persistent homology of a graph using ripser.
-
-    The graph is converted to a distance matrix (shortest-path),
-    then passed to ripser for Vietoris-Rips persistence computation.
+) -> list[np.ndarray]:
+    """Compute persistent homology on a distance matrix using Vietoris-Rips.
 
     Args:
-        G: Undirected NetworkX graph.
-        max_dim: Maximum homological dimension (0, 1, or 2).
-        max_hops: Maximum hop distance for sparse distance matrix.
-        sparse_mode: If True, use sparse distance matrix (faster, recommended).
+        distance_matrix: Square distance matrix.
+        max_dim: Maximum homological dimension to compute (0, 1, or 2).
 
     Returns:
-        Dict with:
-            - 'dgms': list of persistence diagrams (birth-death pairs) per dimension
-            - 'n_nodes': number of nodes in the input graph
-            - 'n_edges': number of edges
+        List of persistence diagrams, one per dimension.
+        Each diagram is an array of (birth, death) pairs.
     """
     try:
         from ripser import ripser
     except ImportError:
-        logger.warning("ripser not installed, falling back to giotto-tda")
-        return _compute_persistence_giotto(G, max_dim)
+        logger.error("ripser not installed. Run: pip install ripser")
+        raise
 
-    n = G.number_of_nodes()
-    if n == 0:
-        return {"dgms": [np.empty((0, 2)) for _ in range(max_dim + 1)], "n_nodes": 0, "n_edges": 0}
+    n = distance_matrix.shape[0]
+    logger.info(f"  Running Vietoris-Rips on {n} points, max_dim={max_dim}")
 
-    if n == 1:
-        dgms = [np.array([[0.0, np.inf]])]
-        dgms.extend([np.empty((0, 2)) for _ in range(max_dim)])
-        return {"dgms": dgms, "n_nodes": 1, "n_edges": 0}
-
-    log_memory(f"Before persistence ({n} nodes)")
-
-    if sparse_mode and n > 500:
-        dist = _adjacency_to_sparse_distance(G, max_hops=max_hops)
-        result = ripser(dist, maxdim=max_dim, distance_matrix=True)
-        del dist
-    else:
-        dist = _adjacency_to_distance(G)
-        result = ripser(dist, maxdim=max_dim, distance_matrix=True)
-        del dist
-
-    gc.collect()
-    log_memory(f"After persistence ({n} nodes)")
-
-    return {
-        "dgms": result["dgms"],
-        "n_nodes": n,
-        "n_edges": G.number_of_edges(),
-    }
-
-
-def _compute_persistence_giotto(G: nx.Graph, max_dim: int = 2) -> dict:
-    """Fallback: compute persistence using giotto-tda.
-
-    Args:
-        G: Undirected NetworkX graph.
-        max_dim: Maximum homological dimension.
-
-    Returns:
-        Same format as compute_persistence().
-    """
-    from gtda.homology import VietorisRipsPersistence
-
-    n = G.number_of_nodes()
-    if n == 0:
-        return {"dgms": [np.empty((0, 2)) for _ in range(max_dim + 1)], "n_nodes": 0, "n_edges": 0}
-
-    dist = _adjacency_to_distance(G)
-    dist_3d = dist.reshape(1, n, n)
-
-    vr = VietorisRipsPersistence(
-        homology_dimensions=list(range(max_dim + 1)),
-        metric="precomputed",
-    )
-    diagrams = vr.fit_transform(dist_3d)
-
-    # Convert giotto format (n_features, 3) to ripser format (list of (n, 2) per dim)
-    dgms = []
-    for dim in range(max_dim + 1):
-        mask = diagrams[0][:, 2] == dim
-        dgms.append(diagrams[0][mask, :2])
-
-    return {"dgms": dgms, "n_nodes": n, "n_edges": G.number_of_edges()}
-
-
-def compute_persistence_flagser(
-    adj: sparse.csr_matrix,
-    max_dim: int = 2,
-    directed: bool = True,
-) -> dict:
-    """Compute persistent homology of a directed flag complex using pyflagser.
-
-    pyflagser takes a directed adjacency matrix directly — no distance matrix
-    needed. This eliminates the memory-intensive shortest-path computation
-    and preserves citation direction.
-
-    Args:
-        adj: Sparse directed adjacency matrix (rows cite columns).
-        max_dim: Maximum homological dimension (0, 1, or 2).
-        directed: If True, compute on the directed flag complex.
-            If False, symmetrize first (equivalent to undirected clique complex).
-
-    Returns:
-        Dict with:
-            - 'dgms': list of persistence diagrams (birth-death pairs) per dimension
-            - 'n_nodes': number of nodes
-            - 'n_edges': number of directed edges
-    """
-    from pyflagser import flagser_weighted
-
-    n = adj.shape[0]
-    n_edges = adj.nnz
-
-    if n == 0:
-        return {
-            "dgms": [np.empty((0, 2)) for _ in range(max_dim + 1)],
-            "n_nodes": 0,
-            "n_edges": 0,
-        }
-
-    if n == 1:
-        dgms = [np.array([[0.0, np.inf]])]
-        dgms.extend([np.empty((0, 2)) for _ in range(max_dim)])
-        return {"dgms": dgms, "n_nodes": 1, "n_edges": 0}
-
-    log_memory(f"Before flagser ({n} nodes, {n_edges} edges)")
-
-    # Ensure binary adjacency with no self-loops, float64 for flagser_weighted
-    adj = (adj > 0).astype(np.float64)
-    adj.setdiag(0)
-    adj.eliminate_zeros()
-
-    # flagser_weighted with default filtration returns persistence diagrams;
-    # flagser_unweighted only returns Betti numbers without diagrams.
-    result = flagser_weighted(
-        adj,
-        directed=directed,
-        max_dimension=max_dim,
-        min_dimension=0,
+    result = ripser(
+        distance_matrix,
+        maxdim=max_dim,
+        distance_matrix=True,
     )
 
-    log_memory(f"After flagser ({n} nodes)")
+    diagrams = result["dgms"]
+    for dim, dgm in enumerate(diagrams):
+        n_features = len(dgm)
+        n_finite = np.isfinite(dgm[:, 1]).sum() if n_features > 0 else 0
+        logger.info(f"  H{dim}: {n_features} features ({n_finite} finite)")
 
-    dgms = result["dgms"]
+    return diagrams
 
-    # Ensure each diagram is a 2D array (flagser may return empty list)
-    for i in range(max_dim + 1):
-        if i >= len(dgms) or len(dgms[i]) == 0:
-            if i < len(dgms):
-                dgms[i] = np.empty((0, 2))
-            else:
-                dgms.append(np.empty((0, 2)))
-        else:
-            dgms[i] = np.asarray(dgms[i], dtype=np.float64)
-
-    return {"dgms": dgms[:max_dim + 1], "n_nodes": n, "n_edges": n_edges}
-
-
-# ---------------------------------------------------------------------------
-# Betti numbers
-# ---------------------------------------------------------------------------
 
 def betti_numbers(
-    dgms: list[np.ndarray],
+    diagrams: list[np.ndarray],
     threshold: Optional[float] = None,
-) -> tuple[int, ...]:
+) -> tuple[int, int, int]:
     """Extract Betti numbers from persistence diagrams.
 
-    β₀ = connected components
-    β₁ = 1-dimensional loops (circular knowledge flows)
-    β₂ = 2-dimensional voids (enclosed cavities)
-
     Args:
-        dgms: List of persistence diagrams per dimension.
+        diagrams: List of persistence diagrams from compute_persistence.
         threshold: If given, only count features with persistence > threshold.
+                   If None, count all features alive at the median filtration value.
 
     Returns:
-        Tuple of Betti numbers (β₀, β₁, ..., β_max_dim).
+        Tuple of (β₀, β₁, β₂). If a dimension wasn't computed, returns 0.
     """
     bettis = []
-    for dgm in dgms:
-        if len(dgm) == 0:
+    for dim in range(3):
+        if dim >= len(diagrams) or len(diagrams[dim]) == 0:
             bettis.append(0)
             continue
 
-        persistence = dgm[:, 1] - dgm[:, 0]
+        dgm = diagrams[dim]
 
         if threshold is not None:
-            # Count features with persistence > threshold (excluding infinite features)
-            finite_mask = np.isfinite(dgm[:, 1])
-            count = int(np.sum((persistence[finite_mask] > threshold)))
+            # Count features with persistence above threshold
+            persistence = dgm[:, 1] - dgm[:, 0]
+            # Handle infinite death times
+            finite_mask = np.isfinite(persistence)
+            count = int((persistence[finite_mask] > threshold).sum())
+            # Add infinite features (they always exceed any threshold)
+            count += int((~finite_mask).sum())
         else:
-            # Count all features (including infinite)
-            count = len(dgm)
+            # Count all features (excluding trivial ones with zero persistence)
+            persistence = dgm[:, 1] - dgm[:, 0]
+            finite_mask = np.isfinite(persistence)
+            count = int((persistence[finite_mask] > 1e-10).sum())
+            count += int((~finite_mask).sum())
 
         bettis.append(count)
 
     return tuple(bettis)
 
 
-# ---------------------------------------------------------------------------
-# Persistence entropy
-# ---------------------------------------------------------------------------
+def persistence_entropy(diagrams: list[np.ndarray]) -> float:
+    """Compute Shannon entropy of the persistence diagram.
 
-def persistence_entropy(dgm: np.ndarray) -> float:
-    """Shannon entropy of a persistence diagram.
-
-    Measures topological complexity: higher entropy = more diverse
-    distribution of feature lifetimes.
+    Measures the topological complexity of the space. Higher entropy means
+    more diverse mix of feature lifetimes. Lower entropy means features
+    are dominated by a few long-lived structures.
 
     Args:
-        dgm: Persistence diagram (N x 2 array of birth-death pairs).
+        diagrams: List of persistence diagrams from compute_persistence.
 
     Returns:
-        Entropy in bits. Returns 0.0 for empty or single-feature diagrams.
+        Shannon entropy (bits). Returns 0.0 if no finite features exist.
     """
-    if len(dgm) == 0:
+    # Collect all finite persistence values across all dimensions
+    all_persistence = []
+    for dgm in diagrams:
+        if len(dgm) == 0:
+            continue
+        persistence = dgm[:, 1] - dgm[:, 0]
+        finite = persistence[np.isfinite(persistence)]
+        positive = finite[finite > 1e-10]
+        all_persistence.extend(positive)
+
+    if len(all_persistence) == 0:
         return 0.0
 
-    # Only consider finite features
-    finite_mask = np.isfinite(dgm[:, 1])
-    dgm_finite = dgm[finite_mask]
-
-    if len(dgm_finite) <= 1:
-        return 0.0
-
-    lifetimes = dgm_finite[:, 1] - dgm_finite[:, 0]
-    lifetimes = lifetimes[lifetimes > 0]
-
-    if len(lifetimes) == 0:
-        return 0.0
+    all_persistence = np.array(all_persistence)
 
     # Normalize to probability distribution
-    total = lifetimes.sum()
-    probs = lifetimes / total
+    total = all_persistence.sum()
+    if total == 0:
+        return 0.0
+
+    probs = all_persistence / total
+    probs = probs[probs > 0]  # remove zeros for log
 
     # Shannon entropy
-    entropy = -np.sum(probs * np.log2(probs + 1e-15))
+    entropy = -np.sum(probs * np.log2(probs))
+
     return float(entropy)
 
 
-# ---------------------------------------------------------------------------
-# Topology summary for a single graph
-# ---------------------------------------------------------------------------
-
-def topology_summary(G: nx.Graph, max_dim: int = 2, max_hops: int = 5) -> dict:
-    """Compute a full topological summary of a graph.
+def max_persistence(diagrams: list[np.ndarray], dim: int = 1) -> float:
+    """Get the maximum persistence in a given dimension.
 
     Args:
-        G: Undirected NetworkX graph (should already be reduced if needed).
-        max_dim: Maximum homological dimension.
-        max_hops: Maximum hop distance for distance matrix.
+        diagrams: List of persistence diagrams.
+        dim: Homological dimension (default 1 for loops).
 
     Returns:
-        Dict with β₀, β₁, β₂, persistence_entropy, max_persistence,
-        n_long_lived_features, n_nodes, n_edges.
+        Maximum persistence value, or 0.0 if no features in that dimension.
     """
-    result = compute_persistence(G, max_dim=max_dim, max_hops=max_hops)
-    dgms = result["dgms"]
+    if dim >= len(diagrams) or len(diagrams[dim]) == 0:
+        return 0.0
 
-    bettis = betti_numbers(dgms)
+    dgm = diagrams[dim]
+    persistence = dgm[:, 1] - dgm[:, 0]
+    finite = persistence[np.isfinite(persistence)]
 
-    # Persistence entropy across all dimensions
-    all_finite = []
-    for dgm in dgms:
-        if len(dgm) > 0:
-            finite = dgm[np.isfinite(dgm[:, 1])]
-            if len(finite) > 0:
-                all_finite.append(finite)
+    if len(finite) == 0:
+        return 0.0
 
-    combined = np.vstack(all_finite) if all_finite else np.empty((0, 2))
-    pe = persistence_entropy(combined)
-
-    # Max persistence (finite features only)
-    max_pers = 0.0
-    for dgm in dgms:
-        if len(dgm) > 0:
-            finite = dgm[np.isfinite(dgm[:, 1])]
-            if len(finite) > 0:
-                lifetimes = finite[:, 1] - finite[:, 0]
-                max_pers = max(max_pers, float(lifetimes.max()))
-
-    # Long-lived features: persistence > median persistence
-    n_long = 0
-    if len(combined) > 0:
-        lifetimes = combined[:, 1] - combined[:, 0]
-        median_pers = np.median(lifetimes)
-        n_long = int(np.sum(lifetimes > median_pers))
-
-    return {
-        "beta_0": bettis[0] if len(bettis) > 0 else 0,
-        "beta_1": bettis[1] if len(bettis) > 1 else 0,
-        "beta_2": bettis[2] if len(bettis) > 2 else 0,
-        "persistence_entropy": pe,
-        "max_persistence": max_pers,
-        "n_long_lived_features": n_long,
-        "n_nodes": result["n_nodes"],
-        "n_edges": result["n_edges"],
-    }
+    return float(finite.max())
 
 
-def topology_summary_directed(
-    adj: sparse.csr_matrix,
-    max_dim: int = 2,
-    max_nodes: int = 30_000,
-) -> dict:
-    """Compute a full topological summary of a directed graph using pyflagser.
+def n_long_lived_features(
+    diagrams: list[np.ndarray],
+    dim: int = 1,
+    percentile: float = 90,
+) -> int:
+    """Count features with persistence above a given percentile.
 
-    Mirrors ``topology_summary()`` but operates on directed sparse adjacency,
-    using flagser instead of ripser.
+    "Long-lived" topological features are the persistent structures —
+    loops or voids that survive across a wide range of scales.
 
     Args:
-        adj: Sparse directed adjacency matrix.
-        max_dim: Maximum homological dimension.
-        max_nodes: Max nodes before reduction.
+        diagrams: List of persistence diagrams.
+        dim: Homological dimension.
+        percentile: Threshold percentile (default 90th).
 
     Returns:
-        Dict with β₀, β₁, β₂, persistence_entropy, max_persistence,
-        n_long_lived_features, n_nodes, n_edges, backend.
+        Count of features above the percentile threshold.
     """
-    adj, _ = reduce_sparse_digraph(adj, max_nodes=max_nodes)
+    if dim >= len(diagrams) or len(diagrams[dim]) == 0:
+        return 0
 
-    result = compute_persistence_flagser(adj, max_dim=max_dim, directed=True)
-    dgms = result["dgms"]
+    dgm = diagrams[dim]
+    persistence = dgm[:, 1] - dgm[:, 0]
+    finite = persistence[np.isfinite(persistence)]
 
-    bettis = betti_numbers(dgms)
+    if len(finite) == 0:
+        return 0
 
-    # Persistence entropy across all dimensions
-    all_finite = []
-    for dgm in dgms:
-        if len(dgm) > 0:
-            finite = dgm[np.isfinite(dgm[:, 1])]
-            if len(finite) > 0:
-                all_finite.append(finite)
-
-    combined = np.vstack(all_finite) if all_finite else np.empty((0, 2))
-    pe = persistence_entropy(combined)
-
-    # Max persistence (finite features only)
-    max_pers = 0.0
-    for dgm in dgms:
-        if len(dgm) > 0:
-            finite = dgm[np.isfinite(dgm[:, 1])]
-            if len(finite) > 0:
-                lifetimes = finite[:, 1] - finite[:, 0]
-                max_pers = max(max_pers, float(lifetimes.max()))
-
-    # Long-lived features: persistence > median persistence
-    n_long = 0
-    if len(combined) > 0:
-        lifetimes = combined[:, 1] - combined[:, 0]
-        median_pers = np.median(lifetimes)
-        n_long = int(np.sum(lifetimes > median_pers))
-
-    return {
-        "beta_0": bettis[0] if len(bettis) > 0 else 0,
-        "beta_1": bettis[1] if len(bettis) > 1 else 0,
-        "beta_2": bettis[2] if len(bettis) > 2 else 0,
-        "persistence_entropy": pe,
-        "max_persistence": max_pers,
-        "n_long_lived_features": n_long,
-        "n_nodes": result["n_nodes"],
-        "n_edges": result["n_edges"],
-        "backend": "flagser",
-    }
+    threshold = np.percentile(finite, percentile)
+    return int((finite > threshold).sum())
 
 
 # ---------------------------------------------------------------------------
-# Sliding window topology
+# Sliding window topology computation
 # ---------------------------------------------------------------------------
 
-@timer
 def sliding_window_topology(
-    citations: pd.DataFrame,
+    citations_df: pd.DataFrame,
+    cpc_map: pd.DataFrame,
+    window_years: int = 5,
+    stride_years: int = 1,
+    start_year: int = 1980,
+    end_year: int = 2023,
+    level: str = "subclass",
+    max_dim: int = 2,
+    cache_dir: Optional[str] = None,
+) -> pd.DataFrame:
+    """Compute topological metrics across sliding time windows.
+
+    For each window, builds a CPC co-citation matrix, converts to a
+    distance matrix, computes persistent homology, and extracts metrics.
+
+    Args:
+        citations_df: Citations with [citing_id, cited_id, citing_year].
+        cpc_map: CPC mappings with [patent_id, cpc_section, cpc_class, cpc_subclass].
+        window_years: Width of each time window in years.
+        stride_years: Step between consecutive windows.
+        start_year: First window starts here.
+        end_year: Last window ends here.
+        level: CPC granularity ("section", "class", or "subclass").
+        max_dim: Maximum homological dimension.
+        cache_dir: If given, cache results per window to this directory.
+
+    Returns:
+        DataFrame with columns: window_start, window_end, n_active_classes,
+        beta_0, beta_1, beta_2, persistence_entropy, max_persistence_h1,
+        n_long_lived_h1, mean_distance, median_distance.
+    """
+    if cache_dir:
+        cache_path = Path(cache_dir)
+        cache_path.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    window_starts = range(start_year, end_year - window_years + 2, stride_years)
+
+    logger.info(f"Computing topology: {len(list(window_starts))} windows, "
+                f"level={level}, max_dim={max_dim}")
+
+    for ws in window_starts:
+        we = ws + window_years - 1
+
+        # Check cache
+        if cache_dir:
+            cache_file = cache_path / f"window_{ws}_{we}_{level}.parquet"
+            if cache_file.exists():
+                logger.info(f"  [{ws}-{we}] Loaded from cache")
+                cached = pd.read_parquet(cache_file)
+                results.append(cached.iloc[0].to_dict())
+                continue
+
+        logger.info(f"  [{ws}-{we}] Computing...")
+
+        # Build co-citation matrix
+        cocite_df, labels = build_cocitation_matrix(
+            citations_df, cpc_map, ws, we, level=level
+        )
+
+        if cocite_df.empty or len(labels) < 3:
+            logger.warning(f"  [{ws}-{we}] Insufficient data, skipping")
+            continue
+
+        # Convert to distance matrix
+        result = cocitation_to_distance(cocite_df.values)
+
+        if isinstance(result, tuple):
+            dist_matrix, active_mask = result
+        else:
+            dist_matrix = result
+            active_mask = np.ones(len(labels), dtype=bool)
+
+        if dist_matrix.size == 0:
+            logger.warning(f"  [{ws}-{we}] Distance matrix empty, skipping")
+            continue
+
+        n_active = dist_matrix.shape[0]
+        logger.info(f"  [{ws}-{we}] {n_active} active CPC {level}es")
+
+        # Compute persistent homology
+        diagrams = compute_persistence(dist_matrix, max_dim=max_dim)
+
+        # Extract metrics
+        b0, b1, b2 = betti_numbers(diagrams)
+        pe = persistence_entropy(diagrams)
+        max_p = max_persistence(diagrams, dim=1)
+        n_long = n_long_lived_features(diagrams, dim=1)
+
+        # Distance matrix statistics
+        upper_tri = dist_matrix[np.triu_indices_from(dist_matrix, k=1)]
+        mean_dist = float(upper_tri.mean()) if len(upper_tri) > 0 else 0.0
+        median_dist = float(np.median(upper_tri)) if len(upper_tri) > 0 else 0.0
+
+        row = {
+            "window_start": ws,
+            "window_end": we,
+            "n_active_classes": n_active,
+            "beta_0": b0,
+            "beta_1": b1,
+            "beta_2": b2,
+            "persistence_entropy": pe,
+            "max_persistence_h1": max_p,
+            "n_long_lived_h1": n_long,
+            "mean_distance": mean_dist,
+            "median_distance": median_dist,
+        }
+
+        results.append(row)
+
+        # Cache this window
+        if cache_dir:
+            pd.DataFrame([row]).to_parquet(cache_file, index=False)
+            logger.info(f"  [{ws}-{we}] Cached")
+
+        # Aggressive memory cleanup
+        del cocite_df, dist_matrix, diagrams
+        if 'active_mask' in dir():
+            del active_mask
+        gc.collect()
+
+    df = pd.DataFrame(results)
+    logger.info(f"Topology computation complete: {len(df)} windows")
+    return df
+
+
+def sliding_window_topology_by_section_pair(
+    citations_df: pd.DataFrame,
     cpc_map: pd.DataFrame,
     section_a: str,
     section_b: str,
-    patents: Optional[pd.DataFrame] = None,
     window_years: int = 5,
     stride_years: int = 1,
     start_year: int = 1980,
     end_year: int = 2023,
     max_dim: int = 2,
-    max_nodes: int = 30_000,
-    use_cache: bool = True,
-    backend: str = "ripser",
+    cache_dir: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Compute persistent homology across sliding time windows for a CPC pair.
+    """Compute topology for a specific CPC section pair.
 
-    This is the main analysis function. For each time window:
-        1. Filter citations to the window
-        2. Extract CPC-pair subgraph
-        3. Reduce if too large
-        4. Compute persistent homology
-        5. Summarize topological features
-
-    Results are cached per (section_pair, window_params, backend) to avoid
-    recomputation.
+    Filters patents to those in section A or section B, then computes
+    co-citation patterns at the subclass level within and between these
+    two sections.
 
     Args:
-        citations: Full citation DataFrame with citing_id, cited_id, citing_date.
-        cpc_map: CPC mapping DataFrame.
-        section_a: First CPC section letter.
-        section_b: Second CPC section letter.
-        patents: Optional patent metadata for date filtering.
-        window_years: Width of each window in years.
-        stride_years: Step between windows.
-        start_year: First window end year.
-        end_year: Last window end year.
+        citations_df: Full citations DataFrame.
+        cpc_map: Full CPC mappings DataFrame.
+        section_a: CPC section code (e.g., "A", "C", "G").
+        section_b: CPC section code.
+        window_years, stride_years, start_year, end_year: Window parameters.
         max_dim: Maximum homological dimension.
-        max_nodes: Max nodes per subgraph before reduction.
-        use_cache: Whether to use/save cached results.
-        backend: ``'ripser'`` for Vietoris-Rips on undirected graph, or
-            ``'flagser'`` for directed flag complex persistence (preferred).
+        cache_dir: Cache directory (pair-specific subdirectory will be created).
 
     Returns:
-        DataFrame with one row per window: year, β₀, β₁, β₂,
-        persistence_entropy, max_persistence, n_long_lived_features,
-        n_nodes, n_edges.
+        DataFrame with topology metrics per time window.
     """
-    pair_key = f"{section_a}_{section_b}"
-    suffix = f"_{backend}" if backend != "ripser" else ""
-    cache_file = TOPOLOGY_CACHE / f"sliding_{pair_key}_w{window_years}_s{stride_years}{suffix}.pkl"
+    pair_label = f"{section_a}x{section_b}"
+    logger.info(f"=== CPC Section Pair: {pair_label} ===")
 
-    if use_cache and cache_file.exists():
-        logger.info("Loading cached topology for (%s, %s) [%s]", section_a, section_b, backend)
-        with open(cache_file, "rb") as f:
-            return pickle.load(f)
+    # Filter CPC map to these two sections
+    pair_cpc = cpc_map[cpc_map["cpc_section"].isin([section_a, section_b])].copy()
+    pair_patents = set(pair_cpc["patent_id"].unique())
 
-    logger.info(
-        "Computing sliding-window topology for (%s, %s): %d-%d, window=%d, stride=%d [%s]",
-        section_a, section_b, start_year, end_year, window_years, stride_years, backend,
-    )
-
-    # Pre-filter citations to relevant CPC sections ONCE (avoids rescanning
-    # the full 118M-row DataFrame on every window iteration)
-    section_patents = set(
-        cpc_map[cpc_map["cpc_section"].isin([section_a, section_b])]["patent_id"]
-    )
-    citations = citations[
-        citations["citing_id"].isin(section_patents)
-        & citations["cited_id"].isin(section_patents)
+    # Filter citations to those where at least one patent is in the pair
+    pair_citations = citations_df[
+        citations_df["citing_id"].isin(pair_patents) |
+        citations_df["cited_id"].isin(pair_patents)
     ].copy()
-    citations["citing_date"] = pd.to_datetime(citations["citing_date"])
 
-    logger.info(
-        "Pre-filtered to %d citations for sections (%s, %s)",
-        len(citations), section_a, section_b,
+    logger.info(f"  {pair_label}: {len(pair_patents):,} patents, "
+                f"{len(pair_citations):,} citations")
+
+    if len(pair_citations) < 100:
+        logger.warning(f"  {pair_label}: Too few citations, skipping")
+        return pd.DataFrame()
+
+    # Set up pair-specific cache
+    pair_cache = None
+    if cache_dir:
+        pair_cache = str(Path(cache_dir) / pair_label)
+
+    # Compute sliding window topology at subclass level
+    result = sliding_window_topology(
+        pair_citations,
+        pair_cpc,
+        window_years=window_years,
+        stride_years=stride_years,
+        start_year=start_year,
+        end_year=end_year,
+        level="subclass",
+        max_dim=max_dim,
+        cache_dir=pair_cache,
     )
 
-    rows = []
-    for year in range(start_year, end_year + 1, stride_years):
-        win_start = pd.Timestamp(f"{year - window_years + 1}-01-01")
-        win_end = pd.Timestamp(f"{year}-12-31")
+    if not result.empty:
+        result["section_pair"] = pair_label
 
-        # Filter citations to window
-        mask = (citations["citing_date"] >= win_start) & (citations["citing_date"] <= win_end)
-        window_cites = citations[mask]
+    # Cleanup
+    del pair_cpc, pair_patents, pair_citations
+    gc.collect()
 
-        if len(window_cites) == 0:
-            logger.info("  Year %d: no citations in window, skipping", year)
-            continue
+    return result
 
-        if backend == "flagser":
-            sg = cpc_subgraph_directed(
-                window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes,
-            )
-            if sg.n_nodes < 3:
-                logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, sg.n_nodes)
-                del window_cites, sg
-                continue
-            summary = topology_summary_directed(sg.adj, max_dim=max_dim, max_nodes=max_nodes)
-            del sg
-        else:
-            G = cpc_subgraph_nx(
-                window_cites, cpc_map, section_a, section_b, max_nodes=max_nodes,
-            )
-            if G.number_of_nodes() < 3:
-                logger.info("  Year %d: subgraph too small (%d nodes), skipping", year, G.number_of_nodes())
-                del window_cites, G
-                continue
-            G = reduce_graph(G, max_nodes=max_nodes)
-            summary = topology_summary(G, max_dim=max_dim)
-            del G
 
-        del window_cites
+# ---------------------------------------------------------------------------
+# Full analysis: all priority section pairs
+# ---------------------------------------------------------------------------
 
-        summary["year"] = year
-        rows.append(summary)
+PRIORITY_PAIRS = [
+    ("A", "C"),  # Human necessities × Chemistry → biotech/pharma
+    ("A", "G"),  # Human necessities × Physics → medical devices
+    ("C", "G"),  # Chemistry × Physics → materials/sensors
+    ("C", "H"),  # Chemistry × Electricity → batteries/energy
+    ("G", "H"),  # Physics × Electricity → semiconductors/computing
+    ("B", "G"),  # Operations × Physics → manufacturing tech
+    ("B", "H"),  # Operations × Electricity → automation
+    ("A", "H"),  # Human necessities × Electricity → health tech
+    ("C", "B"),  # Chemistry × Operations → chemical engineering
+    ("F", "H"),  # Mechanical engineering × Electricity → electromechanical
+]
 
-        logger.info(
-            "  Year %d: %d nodes, %d edges, β₁=%d, PE=%.3f",
-            year, summary["n_nodes"], summary["n_edges"],
-            summary["beta_1"], summary["persistence_entropy"],
+
+def compute_all_priority_pairs(
+    citations_df: pd.DataFrame,
+    cpc_map: pd.DataFrame,
+    cache_dir: str = "data/topology_cache",
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute topology for all 10 priority CPC section pairs.
+
+    Args:
+        citations_df: Full citations DataFrame.
+        cpc_map: Full CPC mappings DataFrame.
+        cache_dir: Base cache directory.
+        **kwargs: Additional arguments passed to sliding_window_topology_by_section_pair.
+
+    Returns:
+        Combined DataFrame with topology metrics for all pairs.
+    """
+    all_results = []
+
+    for i, (sa, sb) in enumerate(PRIORITY_PAIRS):
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Pair {i+1}/{len(PRIORITY_PAIRS)}: {sa}x{sb}")
+        logger.info(f"{'='*60}")
+
+        result = sliding_window_topology_by_section_pair(
+            citations_df,
+            cpc_map,
+            section_a=sa,
+            section_b=sb,
+            cache_dir=cache_dir,
+            **kwargs,
         )
 
-        # Free memory from ripser/flagser intermediates before next window
+        if not result.empty:
+            all_results.append(result)
+            logger.info(f"  {sa}x{sb}: {len(result)} windows computed")
+            logger.info(f"  β₁ range: {result['beta_1'].min()} - {result['beta_1'].max()}")
+            logger.info(f"  PE range: {result['persistence_entropy'].min():.3f} - "
+                        f"{result['persistence_entropy'].max():.3f}")
+        else:
+            logger.warning(f"  {sa}x{sb}: No results")
+
+        # Force garbage collection between pairs
         gc.collect()
 
-    result = pd.DataFrame(rows)
+    if all_results:
+        combined = pd.concat(all_results, ignore_index=True)
+        logger.info(f"\nAll pairs complete: {len(combined)} total window-pair observations")
+        return combined
+    else:
+        logger.error("No results from any pair!")
+        return pd.DataFrame()
 
-    # Cache results
-    if use_cache and len(result) > 0:
-        TOPOLOGY_CACHE.mkdir(parents=True, exist_ok=True)
-        with open(cache_file, "wb") as f:
-            pickle.dump(result, f)
-        logger.info("Cached topology results to %s", cache_file)
+
+# ---------------------------------------------------------------------------
+# Global (full-network) topology computation
+# ---------------------------------------------------------------------------
+
+def compute_global_topology(
+    citations_df: pd.DataFrame,
+    cpc_map: pd.DataFrame,
+    cache_dir: str = "data/topology_cache",
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute topology on the full CPC co-citation space (all sections).
+
+    This gives a single topological time series for the entire patent
+    knowledge landscape — not filtered to any section pair.
+
+    Args:
+        citations_df: Full citations DataFrame.
+        cpc_map: Full CPC mappings DataFrame.
+        cache_dir: Cache directory.
+        **kwargs: Window parameters.
+
+    Returns:
+        DataFrame with topology metrics per time window.
+    """
+    logger.info("=== Global topology (all CPC sections) ===")
+
+    global_cache = str(Path(cache_dir) / "global")
+
+    result = sliding_window_topology(
+        citations_df,
+        cpc_map,
+        level="subclass",
+        cache_dir=global_cache,
+        **kwargs,
+    )
+
+    if not result.empty:
+        result["section_pair"] = "GLOBAL"
 
     return result
