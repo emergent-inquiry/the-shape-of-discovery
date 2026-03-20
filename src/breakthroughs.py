@@ -143,8 +143,8 @@ def get_precursor_window(
     Returns:
         Tuple of (start_year, end_year) for the precursor window.
     """
-    end_year = breakthrough.filing_year
-    start_year = end_year - years_before
+    end_year = breakthrough.filing_year - 1  # Exclude filing year itself
+    start_year = end_year - years_before + 1
     return (start_year, end_year)
 
 

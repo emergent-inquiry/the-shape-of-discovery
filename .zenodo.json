@@ -1,0 +1,33 @@
+{
+  "title": "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network",
+  "description": "Applies persistent homology to the U.S. patent citation network (~8M patents, ~100M citations, 1976-2023) to test whether topological signatures precede technological breakthroughs. Computes Betti numbers and persistence entropy on CPC subclass co-citation distance matrices in sliding time windows, then tests 26 cataloged breakthroughs against matched null models via superposed epoch analysis. Key findings: (1) beta-1 (topological loops) shows no systematic precursor signal (p=0.48); (2) persistence entropy also shows no significant signal (p=0.14); (3) no test survives Holm-Bonferroni correction — a clean null result; (4) topological features carry cross-domain predictive signal comparable to simple features in Leave-One-Group-Out classification (LR AUC 0.80 vs 0.82). Conceptual design, analytical framework, and implementation by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. Facilitated by Christopher Ortiz.",
+  "creators": [
+    {
+      "name": "Ortiz, Christopher",
+      "orcid": "0009-0009-5045-5883"
+    }
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open",
+  "keywords": [
+    "topological data analysis",
+    "persistent homology",
+    "patent citation network",
+    "USPTO",
+    "technological breakthroughs",
+    "Betti numbers",
+    "innovation forecasting",
+    "knowledge graph",
+    "co-citation analysis",
+    "computational topology"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/emergent-inquiry/the-shape-of-discovery",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "notes": "Conceived by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. This project represents a novel application of persistent homology to patent citation networks. The null result for beta-1 as a breakthrough precursor is a genuine scientific finding."
+}

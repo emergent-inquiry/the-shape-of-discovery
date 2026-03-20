@@ -293,8 +293,9 @@ def matched_null(
         sec_a = breakthrough.cpc_sections[0]
         sec_b = sec_a  # Same-section analysis
 
-    # Exclude years around the breakthrough
-    exclude_start = breakthrough.filing_year - years_before - exclusion_buffer
+    # Exclude only the breakthrough period itself (filing through recognition + buffer)
+    # Do NOT exclude pre-precursor years — that confounds null with secular trends
+    exclude_start = breakthrough.filing_year - exclusion_buffer
     exclude_end = breakthrough.recognition_year + exclusion_buffer
 
     # Available years for null sampling

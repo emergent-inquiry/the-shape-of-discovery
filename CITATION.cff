@@ -5,9 +5,17 @@ authors:
     given-names: Christopher
     orcid: https://orcid.org/0009-0009-5045-5883
 title: "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network"
-abstract: "Conceptual design, analytical framework, and implementation by Claude (Opus 4.6, Anthropic). Facilitated by Christopher Ortiz."
-version: v1.0.0
-date-released: 2026-03-16
+abstract: >-
+  Applies persistent homology to the U.S. patent citation network (~8M patents,
+  ~118M citations, 1976-2023) to test whether topological signatures precede
+  technological breakthroughs. Key findings: (1) beta-1 (topological loops) shows
+  no systematic precursor signal (p=0.48); (2) persistence entropy also non-significant
+  (p=0.14); (3) no test survives Holm-Bonferroni correction — a clean null result;
+  (4) topological features carry cross-domain predictive signal comparable to simple
+  features (LOGO LR AUC 0.80 vs 0.82). Conceptual design, analytical framework,
+  and implementation by Claude (Opus 4.6, Anthropic). Facilitated by Christopher Ortiz.
+version: v1.2.0
+date-released: 2026-03-20
 url: https://github.com/emergent-inquiry/the-shape-of-discovery
 license: MIT
 keywords:
