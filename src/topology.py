@@ -126,19 +126,32 @@ def build_cocitation_matrix(
     return cocite_df, all_labels
 
 
-def cocitation_to_distance(cocite_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def cocitation_to_distance(
+    cocite_matrix: np.ndarray,
+    normalize_scale: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
     """Convert a co-citation matrix to a distance matrix using cosine distance.
 
     Each row of the co-citation matrix is treated as a vector describing
     how a CPC class cites other classes. The distance between two classes
     is 1 - cosine_similarity(row_i, row_j).
 
+    When normalize_scale=True (default), the distance matrix is divided by
+    its mean so that Vietoris-Rips operates on relative structure rather
+    than absolute scale. This controls for the density confound: as the
+    patent network grows, co-citation vectors fill in zeros and converge,
+    mechanically compressing cosine distances. Without normalization, this
+    compression reduces topological features over time as an artifact of
+    density growth rather than genuine structural change.
+
     Args:
         cocite_matrix: Square numpy array of co-citation counts.
+        normalize_scale: If True, divide distance matrix by its mean to
+            remove absolute-scale effects across time windows. Default True.
 
     Returns:
         Tuple of (distance matrix, boolean active_mask).
-        Distance: 0 = identical citation patterns, 1 = orthogonal.
+        Distance: 0 = identical citation patterns, 1 = orthogonal (before scaling).
         Returns (empty array, mask) if fewer than 3 active classes.
     """
     # Symmetrize: use (A cites B) + (B cites A) as the undirected co-citation
@@ -171,6 +184,17 @@ def cocitation_to_distance(cocite_matrix: np.ndarray) -> tuple[np.ndarray, np.nd
 
     # Ensure non-negative (numerical precision)
     distance = np.maximum(distance, 0)
+
+    # Scale normalization: divide by mean distance so that Vietoris-Rips
+    # filtration operates on relative structure, not absolute scale.
+    # This removes the density confound where growing networks compress
+    # distances and mechanically reduce topological features.
+    if normalize_scale:
+        upper_tri = distance[np.triu_indices_from(distance, k=1)]
+        mean_d = upper_tri.mean() if len(upper_tri) > 0 else 0.0
+        if mean_d > 0:
+            distance = distance / mean_d
+            logger.info(f"  Scale-normalized distances (raw mean={mean_d:.4f} → 1.0)")
 
     return distance, nonzero_mask
 
@@ -582,29 +606,43 @@ PRIORITY_PAIRS = [
     ("F", "H"),  # Mechanical engineering × Electricity → electromechanical
 ]
 
+# All 28 unique CPC section pairs
+CPC_SECTIONS = list("ABCDEFGH")
+ALL_PAIRS = [
+    (CPC_SECTIONS[i], CPC_SECTIONS[j])
+    for i in range(len(CPC_SECTIONS))
+    for j in range(i + 1, len(CPC_SECTIONS))
+]
+
 
 def compute_all_priority_pairs(
     citations_df: pd.DataFrame,
     cpc_map: pd.DataFrame,
     cache_dir: str = "data/topology_cache",
+    pairs: list[tuple[str, str]] | None = None,
     **kwargs,
 ) -> pd.DataFrame:
-    """Compute topology for all 10 priority CPC section pairs.
+    """Compute topology for CPC section pairs.
 
     Args:
         citations_df: Full citations DataFrame.
         cpc_map: Full CPC mappings DataFrame.
         cache_dir: Base cache directory.
+        pairs: List of (section_a, section_b) tuples. Defaults to PRIORITY_PAIRS.
+            Pass ALL_PAIRS for full 28-pair analysis.
         **kwargs: Additional arguments passed to sliding_window_topology_by_section_pair.
 
     Returns:
         Combined DataFrame with topology metrics for all pairs.
     """
+    if pairs is None:
+        pairs = PRIORITY_PAIRS
+
     all_results = []
 
-    for i, (sa, sb) in enumerate(PRIORITY_PAIRS):
+    for i, (sa, sb) in enumerate(pairs):
         logger.info(f"\n{'='*60}")
-        logger.info(f"Pair {i+1}/{len(PRIORITY_PAIRS)}: {sa}x{sb}")
+        logger.info(f"Pair {i+1}/{len(pairs)}: {sa}x{sb}")
         logger.info(f"{'='*60}")
 
         result = sliding_window_topology_by_section_pair(

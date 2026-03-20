@@ -13,6 +13,7 @@ from src.topology import (
     max_persistence,
     n_long_lived_features,
     PRIORITY_PAIRS,
+    ALL_PAIRS,
 )
 
 
@@ -344,3 +345,62 @@ class TestPriorityPairs:
             assert len(pair) == 2
             assert len(pair[0]) == 1 and pair[0].isalpha()
             assert len(pair[1]) == 1 and pair[1].isalpha()
+
+
+class TestAllPairs:
+    """Test the ALL_PAIRS constant."""
+
+    def test_count(self):
+        """8 CPC sections → 8 choose 2 = 28 pairs."""
+        assert len(ALL_PAIRS) == 28
+
+    def test_no_duplicates(self):
+        """No duplicate pairs."""
+        normalized = [tuple(sorted(p)) for p in ALL_PAIRS]
+        assert len(set(normalized)) == 28
+
+    def test_no_self_pairs(self):
+        """No pair should have the same section twice."""
+        for a, b in ALL_PAIRS:
+            assert a != b
+
+
+class TestScaleNormalization:
+    """Test that scale normalization controls for density confound."""
+
+    def test_normalized_mean_is_one(self):
+        """After normalization, mean distance should be ~1.0."""
+        matrix = np.array([
+            [0, 10, 5],
+            [8, 0, 3],
+            [2, 7, 0],
+        ], dtype=float)
+        dist, _ = cocitation_to_distance(matrix, normalize_scale=True)
+        upper_tri = dist[np.triu_indices_from(dist, k=1)]
+        assert upper_tri.mean() == pytest.approx(1.0, abs=0.01)
+
+    def test_unnormalized_not_one(self):
+        """Without normalization, mean distance should NOT be 1.0."""
+        matrix = np.array([
+            [0, 10, 5],
+            [8, 0, 3],
+            [2, 7, 0],
+        ], dtype=float)
+        dist, _ = cocitation_to_distance(matrix, normalize_scale=False)
+        upper_tri = dist[np.triu_indices_from(dist, k=1)]
+        assert upper_tri.mean() != pytest.approx(1.0, abs=0.01)
+
+    def test_relative_structure_preserved(self):
+        """Normalization should preserve relative ordering of distances."""
+        matrix = np.array([
+            [0, 10, 5, 1],
+            [8, 0, 3, 2],
+            [2, 7, 0, 6],
+            [1, 2, 6, 0],
+        ], dtype=float)
+        dist_raw, _ = cocitation_to_distance(matrix, normalize_scale=False)
+        dist_norm, _ = cocitation_to_distance(matrix, normalize_scale=True)
+        # The ordering of pairwise distances should be the same
+        raw_order = np.argsort(dist_raw[np.triu_indices_from(dist_raw, k=1)])
+        norm_order = np.argsort(dist_norm[np.triu_indices_from(dist_norm, k=1)])
+        np.testing.assert_array_equal(raw_order, norm_order)

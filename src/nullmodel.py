@@ -54,7 +54,7 @@ def _check_topology_cache(
     Returns the cached row as a dict, or None if not found.
     """
     if cache_dir is None:
-        cache_dir = DATA_DIR / "topology_cache"
+        cache_dir = DATA_DIR / "topology_cache_v2"
 
     # Try both pair orderings
     for pair_label in [f"{sec_a}x{sec_b}", f"{sec_b}x{sec_a}"]:
