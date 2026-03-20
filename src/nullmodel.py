@@ -44,6 +44,34 @@ def _ensure_citing_year(citations: pd.DataFrame) -> pd.DataFrame:
     return citations
 
 
+def _check_topology_cache(
+    sec_a: str, sec_b: str, start_year: int, end_year: int,
+    cache_dir: Path | None = None,
+) -> dict | None:
+    """Check if a topology result is already cached on disk.
+
+    Looks for cached per-window parquet files from prior compute_all_priority_pairs runs.
+    Returns the cached row as a dict, or None if not found.
+    """
+    if cache_dir is None:
+        cache_dir = DATA_DIR / "topology_cache"
+
+    # Try both pair orderings
+    for pair_label in [f"{sec_a}x{sec_b}", f"{sec_b}x{sec_a}"]:
+        cache_file = cache_dir / pair_label / f"window_{start_year}_{end_year}_subclass.parquet"
+        if cache_file.exists():
+            row = pd.read_parquet(cache_file).iloc[0].to_dict()
+            return row
+
+    # Also check global cache
+    cache_file = cache_dir / "global" / f"window_{start_year}_{end_year}_subclass.parquet"
+    if cache_file.exists():
+        row = pd.read_parquet(cache_file).iloc[0].to_dict()
+        return row
+
+    return None
+
+
 def _compute_topology_for_window(
     citations: pd.DataFrame,
     cpc_map: pd.DataFrame,
@@ -54,16 +82,32 @@ def _compute_topology_for_window(
 ) -> dict | None:
     """Compute topology metrics for a single section pair and time window.
 
+    Checks the on-disk cache first (from prior sliding_window runs).
     Returns a dict of metrics or None if computation fails.
     """
+    start_year = year - window_years + 1
+    end_year = year
+
+    # Check cache first — avoids recomputation for priority pairs
+    cached = _check_topology_cache(sec_a, sec_b, start_year, end_year)
+    if cached is not None:
+        return {
+            "beta_0": int(cached.get("beta_0", 0)),
+            "beta_1": int(cached.get("beta_1", 0)),
+            "beta_2": int(cached.get("beta_2", 0)),
+            "persistence_entropy": float(cached.get("persistence_entropy", 0)),
+            "max_persistence_h1": float(cached.get("max_persistence_h1", 0)),
+            "n_long_lived_h1": int(cached.get("n_long_lived_h1", 0)),
+            "n_active_classes": int(cached.get("n_active_classes", 0)),
+            "mean_distance": float(cached.get("mean_distance", 0)),
+            "median_distance": float(cached.get("median_distance", 0)),
+        }
+
     # Filter CPC map to the two sections
     pair_cpc = cpc_map[cpc_map["cpc_section"].isin([sec_a, sec_b])]
     pair_patents = set(pair_cpc["patent_id"].unique())
 
     # Filter citations
-    start_year = year - window_years + 1
-    end_year = year
-
     pair_citations = citations[
         (citations["citing_id"].isin(pair_patents) |
          citations["cited_id"].isin(pair_patents))
@@ -232,7 +276,7 @@ def matched_null(
     Returns:
         DataFrame of null topology measurements.
     """
-    bt_name = breakthrough.name.replace(" ", "_").lower()[:30]
+    bt_name = breakthrough.name.replace(" ", "_").replace("/", "_").lower()[:30]
     cache_file = NULL_CACHE / f"matched_{bt_name}_n{n_samples}_s{seed}_cocite.pkl"
     if use_cache and cache_file.exists():
         logger.info("Loading cached matched null for %s", breakthrough.name)
@@ -319,50 +363,43 @@ def superposed_epoch(
     all_series = []
 
     for bt in breakthroughs:
-        # Find the topology result for this breakthrough's CPC pair
-        if len(bt.cpc_sections) >= 2:
-            sec_a, sec_b = bt.cpc_sections[0], bt.cpc_sections[1]
-        else:
-            sec_a = sec_b = bt.cpc_sections[0]
-
-        # Try multiple key formats
-        candidates = [
-            f"{sec_a}x{sec_b}",      # new format
-            f"{sec_b}x{sec_a}",      # new format reversed
-            f"{sec_a}_{sec_b}",      # old format
-            f"{sec_b}_{sec_a}",      # old format reversed
-        ]
-
-        topo = None
-        for key in candidates:
-            if key in topology_results:
-                topo = topology_results[key]
-                break
-
-        if topo is None:
-            logger.warning("No topology data for %s (tried: %s)", bt.name, candidates[:2])
+        sections = bt.cpc_sections if len(bt.cpc_sections) >= 1 else []
+        if not sections:
             continue
 
-        if metric not in topo.columns:
+        # Find all topology pairs containing at least one of this breakthrough's sections
+        matching_topos = []
+        for key, topo in topology_results.items():
+            if "x" not in key:
+                continue
+            sec_a, sec_b = key.split("x")
+            if any(s in [sec_a, sec_b] for s in sections):
+                matching_topos.append(topo)
+
+        if not matching_topos:
+            logger.warning("No topology data for %s (sections: %s)", bt.name, sections)
             continue
 
-        # Determine the year column (support both old and new format)
-        if "window_end" in topo.columns:
-            year_col = "window_end"
-        elif "year" in topo.columns:
-            year_col = "year"
-        else:
-            continue
+        # Average across all matching pairs for this breakthrough
+        for topo in matching_topos:
+            if metric not in topo.columns:
+                continue
 
-        # Align at filing_year = 0
-        series = topo[[year_col, metric]].copy()
-        series["epoch_year"] = series[year_col] - bt.filing_year
-        series = series[
-            (series["epoch_year"] >= -years_before) & (series["epoch_year"] <= years_after)
-        ]
+            if "window_end" in topo.columns:
+                year_col = "window_end"
+            elif "year" in topo.columns:
+                year_col = "year"
+            else:
+                continue
 
-        if len(series) > 0:
-            all_series.append(series[["epoch_year", metric]])
+            series = topo[[year_col, metric]].copy()
+            series["epoch_year"] = series[year_col] - bt.filing_year
+            series = series[
+                (series["epoch_year"] >= -years_before) & (series["epoch_year"] <= years_after)
+            ]
+
+            if len(series) > 0:
+                all_series.append(series[["epoch_year", metric]])
 
     if not all_series:
         return pd.DataFrame(columns=["epoch_year", "mean", "std", "n"])
