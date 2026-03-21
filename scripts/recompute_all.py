@@ -7,7 +7,7 @@ This script:
    distance matrices (controlling for the density confound)
 3. Computes global topology
 4. Clears stale null model caches
-5. Saves everything to data/topology_cache_v2/
+5. Saves everything to data/topology_cache/
 
 Expected runtime: ~6-8 hours on 16GB MacBook (each window takes seconds,
 but building co-citation matrices from ~118M citations takes ~10 min per pair).
@@ -30,7 +30,7 @@ from src.utils import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_DIR = "data/topology_cache_v2"
+CACHE_DIR = "data/topology_cache"
 NULL_CACHE = Path("data/null_cache")
 
 

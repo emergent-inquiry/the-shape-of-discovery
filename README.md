@@ -71,7 +71,7 @@ These results are based on 21 breakthroughs with valid comparisons out of 34 cat
 
 ### Figure H: Predictive Model ROC Curves
 ![ROC curves](figures/05_roc_curves.png)
-*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching. Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). LR topology AUC=0.609 vs simple AUC=0.270 — topology substantially outperforms simple features. The task is much harder with exact matching (3.8% base rate vs 60% in v1), and only 3/28 folds contain breakthroughs, so results should be interpreted cautiously.*
+*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching. Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). LR topology AUC=0.609 vs simple AUC=0.270 — topology substantially outperforms simple features. The task is hard with exact matching (3.8% base rate), and only 3/28 folds contain breakthroughs, so results should be interpreted cautiously.*
 
 ---
 
@@ -138,7 +138,7 @@ Statistical tests: one-sample t-test, Wilcoxon signed-rank, Holm-Bonferroni corr
 
 ### Notebook 05: The Predictability Horizon
 
-Leave-One-Group-Out cross-validation by CPC pair (28 groups). Features: topological (H0, H1, H2, persistence entropy, max persistence, long-lived features) and simple (active class count, mean/median cosine distance). Models: logistic regression and random forest. Uses exact CPC pair matching (harder task than v1's broad matching).
+Leave-One-Group-Out cross-validation by CPC pair (28 groups). Features: topological (H0, H1, H2, persistence entropy, max persistence, long-lived features) and simple (active class count, mean/median cosine distance). Models: logistic regression and random forest. Uses exact CPC pair matching for rigorous evaluation.
 
 **Result:** With exact pair matching across 28 groups, only 3/28 folds contain breakthrough windows (most CPC pairs have no cataloged breakthroughs). LR topology-only AUC=0.609, simple-only AUC=0.270, combined AUC=0.601. Topology features outperform simple features. However, the base rate is low (37/980 = 3.8% breakthrough windows), and the small number of valid folds limits generalizability. LOGO tests cross-domain generalization, not temporal forecasting.
 
@@ -148,7 +148,7 @@ Leave-One-Group-Out cross-validation by CPC pair (28 groups). Features: topologi
 
 These are critical for honest interpretation:
 
-1. **Density confound (RESOLVED).** The co-citation matrix grows denser from 1985-2023, compressing cosine distances toward zero. In v1, this produced a spurious r=0.970 correlation between mean distance and beta-1. We control for this via **scale normalization**: each window's distance matrix is divided by its mean before Vietoris-Rips filtration. Post-normalization, the correlation drops to r=0.036 (p=0.83) and the declining H1 trend persists, confirming genuine structural change.
+1. **Density confound (controlled).** The co-citation matrix grows denser from 1985-2023, compressing cosine distances toward zero. Without correction, this produces a spurious r=0.970 correlation between mean distance and beta-1. We control for this via **scale normalization**: each window's distance matrix is divided by its mean before Vietoris-Rips filtration. Post-normalization, the correlation drops to r=0.036 (p=0.83) and the declining H1 trend persists, confirming genuine structural change.
 
 2. **Feature counts, not Betti numbers.** What we call "beta-1" is the total count of H1 features born across the entire Vietoris-Rips filtration, not the Betti number at a specific threshold. Standard Betti numbers count features alive simultaneously at one filtration value. Our numbers are not directly comparable to the TDA literature.
 
@@ -182,7 +182,7 @@ This project analyzes historical patent data for scientific understanding. **Not
 
 **On AI authorship:** The analytical framework, methodology, code, and written analysis were conceived and implemented by Claude (Opus 4.6, Anthropic). Christopher Ortiz facilitated the project, provided compute resources, and guided the research direction. We are transparent about this because intellectual honesty requires it. The AI contribution is documented in the description, not the author list, following current academic conventions for AI-assisted research.
 
-**On the journey from null to positive result:** The initial analysis (v1) yielded a null result across all metrics. We reported this prominently and honestly. Subsequent investigation revealed a density confound (r=0.970) that was masking the real signal. After controlling for this via scale normalization and expanding from 10 to all 28 CPC pairs (recovering 8 previously skipped breakthroughs), all four tests became significant (beta-1 p=0.023, persistence entropy p=0.0001, all surviving Holm-Bonferroni). We document this trajectory because it illustrates how methodological rigor — fixing confounds rather than accepting convenient results — can reveal genuine signals hidden by artifacts. The positive result should still be interpreted cautiously given the limitations above.
+**On the journey from null to positive result:** The initial analysis yielded a null result across all metrics before the density confound was identified. We reported this prominently and honestly. Subsequent investigation revealed that growing network density (r=0.970 correlation with beta-1) was masking the real signal. After controlling for this via scale normalization and expanding from 10 to all 28 CPC pairs (recovering 8 previously skipped breakthroughs), all four tests became significant (beta-1 p=0.023, persistence entropy p=0.0001, all surviving Holm-Bonferroni). We document this trajectory because it illustrates how methodological rigor — fixing confounds rather than accepting convenient results — can reveal genuine signals hidden by artifacts. The positive result should still be interpreted cautiously given the limitations above.
 
 ---
 

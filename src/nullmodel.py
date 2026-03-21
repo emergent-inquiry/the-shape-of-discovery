@@ -54,7 +54,7 @@ def _check_topology_cache(
     Returns the cached row as a dict, or None if not found.
     """
     if cache_dir is None:
-        cache_dir = DATA_DIR / "topology_cache_v2"
+        cache_dir = DATA_DIR / "topology_cache"
 
     # Try both pair orderings
     for pair_label in [f"{sec_a}x{sec_b}", f"{sec_b}x{sec_a}"]:
@@ -195,7 +195,7 @@ def random_cpc_pair_baseline(
     Returns:
         DataFrame with topology metrics for each random sample.
     """
-    cache_file = NULL_CACHE / f"random_baseline_n{n_samples}_w{window_years}_s{seed}_cocite.pkl"
+    cache_file = NULL_CACHE / f"random_baseline_n{n_samples}_w{window_years}_s{seed}.pkl"
     if use_cache and cache_file.exists():
         logger.info("Loading cached random baseline")
         with open(cache_file, "rb") as f:
@@ -277,7 +277,7 @@ def matched_null(
         DataFrame of null topology measurements.
     """
     bt_name = breakthrough.name.replace(" ", "_").replace("/", "_").lower()[:30]
-    cache_file = NULL_CACHE / f"matched_{bt_name}_n{n_samples}_s{seed}_cocite.pkl"
+    cache_file = NULL_CACHE / f"matched_{bt_name}_n{n_samples}_s{seed}.pkl"
     if use_cache and cache_file.exists():
         logger.info("Loading cached matched null for %s", breakthrough.name)
         with open(cache_file, "rb") as f:
