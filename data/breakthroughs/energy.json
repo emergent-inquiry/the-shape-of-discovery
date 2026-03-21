@@ -61,7 +61,7 @@
   },
   {
     "name": "Perovskite Solar Cells",
-    "breakthrough_patents": ["20150136232"],
+    "breakthrough_patents": ["9082992", "9136408"],
     "filing_year": 2013,
     "recognition_year": 2019,
     "cpc_primary": ["H01L", "C09K"],
