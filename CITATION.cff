@@ -9,15 +9,16 @@ abstract: >-
   Applies persistent homology to the U.S. patent citation network (~8M patents,
   ~118M citations, 1976-2023) to test whether topological signatures precede
   technological breakthroughs. After controlling for density confound via scale
-  normalization (r=0.970 → r=0.036), all four tests are significant: beta-1
+  normalization (r=0.970 to r=0.036), all four tests are significant: beta-1
   t-test p=0.023, Wilcoxon p=0.016; persistence entropy t-test p=0.0001,
-  Wilcoxon p=0.0014 — all survive Holm-Bonferroni correction (N=21 breakthroughs).
+  Wilcoxon p=0.0014 — all survive Holm-Bonferroni correction. Expanded
+  analysis: N=65 curated breakthroughs (57 valid comparisons), all 28 CPC
+  pairs cached. Six confound robustness checks implemented (NB04 section 5).
   Pre-breakthrough topology is systematically lower than matched null models.
-  The knowledge landscape simplifies before major advances. Conceptual design,
-  analytical framework, and implementation by Claude (Opus 4.6, Anthropic).
-  Facilitated by Christopher Ortiz.
-version: v2.0.0
-date-released: 2026-03-20
+  Conceptual design, analytical framework, and implementation by Claude
+  (Anthropic). Facilitated by Christopher Ortiz.
+version: v2.1.0
+date-released: 2026-03-21
 url: https://github.com/emergent-inquiry/the-shape-of-discovery
 license: MIT
 keywords:
