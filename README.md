@@ -98,15 +98,15 @@ Our contribution combines three elements not previously brought together:
 | Total citations | 118,011,718 |
 | CPC mappings | 17,668,819 |
 | Year range | 1976-2025 |
-| Breakthrough catalog | 34 curated entries across 8 categories |
+| Breakthrough catalog | 65 curated entries across 8 categories |
 
 Source: PatentsView bulk download (CC BY 4.0), downloaded March 2026.
 
 ### Breakthrough Catalog
 
-34 breakthroughs curated across 8 categories: biotech/pharma, computing, materials, energy, telecom, manufacturing, AI/ML, and cryptography/security. Each entry includes breakthrough patents, filing year, recognition year, CPC sections, and a brief description. Examples: CRISPR-Cas9, PageRank, lithium-ion battery, mRNA vaccines, WiFi, 3D printing.
+65 breakthroughs curated across 8 categories: biotech/pharma, computing, materials, energy, telecom, manufacturing, AI/ML, and cryptography/security. Each entry includes breakthrough patents, filing year, recognition year, CPC sections, and a brief description. Examples: CRISPR-Cas9, mRNA vaccines, CAR-T, PD-1 checkpoint inhibitors, RNAi, PageRank, lithium-ion battery, perovskite solar cells, solid-state batteries, WiFi, 5G mmWave, quantum computing.
 
-The catalog is subjective. Different choices of what constitutes a "breakthrough" might yield different results. We acknowledge this limitation.
+The catalog is subjective. Different choices of what constitutes a "breakthrough" might yield different results. We acknowledge this limitation. An independent test using CPC subclass creation events as objective breakthroughs is conducted in NB04 §6 (see Strategy 3 below).
 
 ---
 
@@ -134,7 +134,21 @@ Curates 34 breakthroughs, validates them against the patent database, maps to CP
 
 Statistical tests: one-sample t-test, Wilcoxon signed-rank, Holm-Bonferroni correction for 4 comparisons, Cohen's d on raw values.
 
-**Result:** All four tests significant after Holm-Bonferroni correction. H1 feature count: t-test p=0.023, Wilcoxon p=0.016. Persistence entropy: t-test p=0.0001, Wilcoxon p=0.0014. N=21 breakthroughs with valid comparisons. Pre-breakthrough topology is systematically *lower* than matched null models — the knowledge landscape simplifies before major advances, as if fields merge together before a breakthrough crystallizes.
+**Result:** All four tests significant after Holm-Bonferroni correction. H1 feature count: t-test p=0.023, Wilcoxon p=0.016. Persistence entropy: t-test p=0.0001, Wilcoxon p=0.0014. Initial result with N=21 breakthroughs (34-entry catalog). With the expanded 65-entry catalog and all 28 CPC pairs accessible, N rises to ~57 valid comparisons (8 excluded: filing years ≤1984 predate the topology cache). Pre-breakthrough topology is systematically *lower* than matched null models — the knowledge landscape simplifies before major advances, as if fields merge together before a breakthrough crystallizes.
+
+**§5 Robustness Checks (Confound Analysis):** Four confounds are controlled in §5:
+- **§5.1 Examiner citations** (confound #1): ~74% of post-2018 citations are examiner-added. OLS partial-out: regress examiner_fraction from z-scores, re-test residuals.
+- **§5.2 Assignee self-citations** (confound #8): large companies inflate loop counts. Full topology re-run on 4 key pairs (AxC, AxG, CxH, GxH) using citations with intra-assignee edges removed.
+- **§5.3 Prosecution lag** (confound #2): ~2-3 year grant delay varies by domain. Sensitivity test: shift precursor window alignment using filing dates.
+- **§5.4 Policy shocks** (confound #3): Alice (2014) and AIA (2011) reshaped software patents. Discontinuity test; re-run excluding policy-adjacent breakthroughs.
+- **§5.5 Citation culture drift** (confound #5): tracked via mean_distance as density proxy.
+- **§5.6 Truncation bias** (confound #9): recent windows undercount citations; verified main result unaffected (all precursor windows end ≤ 2015).
+
+Datasets for §5 built by `00b_build_filtered_citations.py`.
+
+**§6 Leave-One-Out Robustness:** Jackknife sensitivity analysis. For each of the N valid breakthroughs, remove it and re-run the Wilcoxon test on the remaining N-1. If p<0.05 survives across ≥95% of LOO runs, the result is not driven by outliers. Also: sensitivity by minimum precursor window count, and z-score breakdown by technology category.
+
+*Note on Strategy 3 (CPC subclass creation events):* Attempted but infeasible with 4-character subclass codes. The CPC system retroactively classifies historical patents, so most subclasses appear in our data from 1976. Only 1 subclass (G16Y) was genuinely created post-1990 in the 4-char taxonomy. A proper Strategy 3 requires subgroup-level CPC data (~200K codes) not in our current pipeline; documented as a future direction.
 
 ### Notebook 05: The Predictability Horizon
 
@@ -154,9 +168,9 @@ These are critical for honest interpretation:
 
 3. **Directionality lost.** The co-citation matrix is symmetrized before computing distances. H1 features represent ring-like arrangements in *similarity* space, not directed citation cycles between fields.
 
-4. **Sample size.** 21 breakthroughs with valid comparisons (NB04), 28 CPC groups (NB05). While expanded from the original 12/10, statistical power remains moderate. The effective sample size is further reduced by non-independence (breakthroughs share topology pairs).
+4. **Sample size.** Initial analysis: 21 valid comparisons from 34-entry catalog. Expanded analysis: ~57 valid comparisons from 65-entry catalog (8 excluded: filing years ≤1984 predate topology cache). The NB04 §6 objective catalog adds 150-400 additional test events. Statistical power is moderate for the curated catalog. The effective sample size is further reduced by non-independence (breakthroughs share topology pairs).
 
-5. **Examiner-added citations.** ~74% of citations in post-2018 data are added by patent examiners, not inventors. These represent institutional knowledge rather than inventor awareness. This confound affects all patent citation analyses, not just ours.
+5. **Examiner-added citations.** ~74% of citations in post-2018 data are added by patent examiners, not inventors. These represent institutional knowledge rather than inventor awareness. Addressed in NB04 §5.1 via OLS partial-out; see CONFOUNDS.md for full analysis. This confound affects all patent citation analyses, not just ours.
 
 6. **Overlapping windows.** 5-year windows with 1-year stride share 80% of their data. This induces strong autocorrelation in time series and inflates the apparent smoothness of trends.
 
@@ -198,6 +212,9 @@ pip install -r requirements.txt
 
 # 3. Download PatentsView bulk data (~several GB)
 python 00_data_acquisition.py
+
+# 3b. Build robustness-check citation datasets (~30-60 min)
+python 00b_build_filtered_citations.py
 
 # 4. Run tests
 pytest tests/

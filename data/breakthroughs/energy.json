@@ -38,5 +38,45 @@
     "cpc_sections": ["F"],
     "category": "energy",
     "description": "Variable-speed wind turbine with pitch control and power electronics"
+  },
+  {
+    "name": "Blue LED (Gallium Nitride)",
+    "breakthrough_patents": ["5578839", "5290393", "5306662"],
+    "filing_year": 1991,
+    "recognition_year": 2014,
+    "cpc_primary": ["H01L", "C30B"],
+    "cpc_sections": ["H", "C"],
+    "category": "energy",
+    "description": "High-brightness gallium nitride blue LEDs enabling white LED lighting (Nakamura/Nichia)"
+  },
+  {
+    "name": "Lithium Iron Phosphate Battery (LiFePO4)",
+    "breakthrough_patents": ["5910382"],
+    "filing_year": 1997,
+    "recognition_year": 2008,
+    "cpc_primary": ["H01M", "C01B"],
+    "cpc_sections": ["C", "H"],
+    "category": "energy",
+    "description": "Low-cost olivine cathode material for rechargeable lithium batteries (Goodenough/UT Austin)"
+  },
+  {
+    "name": "Perovskite Solar Cells",
+    "breakthrough_patents": ["20150136232"],
+    "filing_year": 2013,
+    "recognition_year": 2019,
+    "cpc_primary": ["H01L", "C09K"],
+    "cpc_sections": ["H", "C"],
+    "category": "energy",
+    "description": "Hybrid organic-inorganic perovskite absorber layers achieving >25% power conversion efficiency, enabling low-cost thin-film photovoltaics"
+  },
+  {
+    "name": "All-Solid-State Battery",
+    "breakthrough_patents": ["9172113"],
+    "filing_year": 2012,
+    "recognition_year": 2022,
+    "cpc_primary": ["H01M", "H01M10/0562"],
+    "cpc_sections": ["H"],
+    "category": "energy",
+    "description": "Solid electrolyte replacing liquid electrolyte in lithium batteries for improved safety and energy density (Samsung SDI/Toyota)"
   }
 ]

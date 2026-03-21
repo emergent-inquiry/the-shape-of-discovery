@@ -58,5 +58,95 @@
     "cpc_sections": ["C", "A"],
     "category": "biotech",
     "description": "Genetically engineered human insulin produced in bacteria"
+  },
+  {
+    "name": "PD-1 Immune Checkpoint Inhibitor (Nivolumab)",
+    "breakthrough_patents": ["7595048", "8008449"],
+    "filing_year": 2002,
+    "recognition_year": 2014,
+    "cpc_primary": ["C07K", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Anti-PD-1 antibody enabling cancer immunotherapy by blocking immune checkpoint (Honjo/Ono Pharmaceutical)"
+  },
+  {
+    "name": "AAV Gene Therapy Vectors",
+    "breakthrough_patents": ["6204059", "6491907"],
+    "filing_year": 1994,
+    "recognition_year": 2017,
+    "cpc_primary": ["C12N", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Adeno-associated virus capsid vectors for gene therapy (Samulski/Wilson)"
+  },
+  {
+    "name": "Drug-Eluting Coronary Stent",
+    "breakthrough_patents": ["5997468", "6273913"],
+    "filing_year": 1997,
+    "recognition_year": 2003,
+    "cpc_primary": ["A61F", "A61L"],
+    "cpc_sections": ["A"],
+    "category": "biotech",
+    "description": "Sirolimus-coated intravascular stent for preventing restenosis (J&J/Cordis CYPHER)"
+  },
+  {
+    "name": "RNA Interference (RNAi/siRNA)",
+    "breakthrough_patents": ["6506559", "7056704"],
+    "filing_year": 1997,
+    "recognition_year": 2006,
+    "cpc_primary": ["C12N", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Gene silencing via double-stranded RNA interference (Fire/Mello/Tuschl)"
+  },
+  {
+    "name": "HIV Protease Inhibitors",
+    "breakthrough_patents": ["5196438", "5484801", "5413999"],
+    "filing_year": 1989,
+    "recognition_year": 1996,
+    "cpc_primary": ["C07D", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Protease inhibitors for HIV/AIDS treatment transforming survival (saquinavir/ritonavir/indinavir)"
+  },
+  {
+    "name": "DNA Microarray (Gene Chip)",
+    "breakthrough_patents": ["5445934", "5744305"],
+    "filing_year": 1989,
+    "recognition_year": 1998,
+    "cpc_primary": ["C12Q", "B01J"],
+    "cpc_sections": ["C", "B"],
+    "category": "biotech",
+    "description": "High-density oligonucleotide arrays for parallel gene expression analysis (Affymetrix)"
+  },
+  {
+    "name": "Optical Coherence Tomography (OCT)",
+    "breakthrough_patents": ["5321501"],
+    "filing_year": 1991,
+    "recognition_year": 2002,
+    "cpc_primary": ["A61B", "G01B"],
+    "cpc_sections": ["A", "G"],
+    "category": "biotech",
+    "description": "Non-invasive cross-sectional imaging using low-coherence interferometry (Fujimoto/MIT)"
+  },
+  {
+    "name": "Antisense Oligonucleotide Therapeutics",
+    "breakthrough_patents": ["4806463"],
+    "filing_year": 1989,
+    "recognition_year": 1998,
+    "cpc_primary": ["C12N", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "Synthetic oligonucleotides that silence disease genes by binding complementary mRNA (ISIS Pharmaceuticals; first drug fomivirsen approved 1998)"
+  },
+  {
+    "name": "Statin Drugs (Lovastatin)",
+    "breakthrough_patents": ["4231938"],
+    "filing_year": 1979,
+    "recognition_year": 1987,
+    "cpc_primary": ["C07D", "A61K"],
+    "cpc_sections": ["C", "A"],
+    "category": "biotech",
+    "description": "HMG-CoA reductase inhibitors lowering LDL cholesterol to prevent cardiovascular disease (Merck/Alberts; first statin drug class)"
   }
 ]

@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from src.breakthroughs import Breakthrough, get_precursor_window
 from src.topology import (
+    ALL_PAIRS,
     build_cocitation_matrix,
     cocitation_to_distance,
     compute_persistence,
@@ -63,11 +64,10 @@ def _check_topology_cache(
             row = pd.read_parquet(cache_file).iloc[0].to_dict()
             return row
 
-    # Also check global cache
-    cache_file = cache_dir / "global" / f"window_{start_year}_{end_year}_subclass.parquet"
-    if cache_file.exists():
-        row = pd.read_parquet(cache_file).iloc[0].to_dict()
-        return row
+    # NOTE: Global cache intentionally NOT checked here. Same-section lookups
+    # (e.g., "GxG") must return None — global topology (~260 subclasses) has a
+    # fundamentally different scale than cross-section pair topology (~30-80
+    # subclasses) and must never be used as a substitute.
 
     return None
 
@@ -286,20 +286,30 @@ def matched_null(
     rng = np.random.default_rng(seed)
     citations = _ensure_citing_year(citations)
 
-    # Determine CPC sections for this breakthrough
-    if len(breakthrough.cpc_sections) >= 2:
-        sec_a, sec_b = breakthrough.cpc_sections[0], breakthrough.cpc_sections[1]
-    else:
-        sec_a = breakthrough.cpc_sections[0]
-        sec_b = sec_a  # Same-section analysis
+    # Build list of matching cross-section pairs — mirrors NB04's matching logic.
+    # For BOTH single-section and multi-section breakthroughs, the null must
+    # average across the same set of cross-section pairs as the pre-breakthrough
+    # metric. This ensures the null distribution is on the same scale.
+    matching_pairs = [
+        (a, b) for a, b in ALL_PAIRS
+        if any(s in [a, b] for s in breakthrough.cpc_sections)
+    ]
+
+    if not matching_pairs:
+        logger.warning("No matching pairs for %s (sections: %s)",
+                       breakthrough.name, breakthrough.cpc_sections)
+        return pd.DataFrame()
+
+    logger.info("Matched null for %s: %d matching cross-section pairs",
+                breakthrough.name, len(matching_pairs))
 
     # Exclude only the breakthrough period itself (filing through recognition + buffer)
     # Do NOT exclude pre-precursor years — that confounds null with secular trends
     exclude_start = breakthrough.filing_year - exclusion_buffer
     exclude_end = breakthrough.recognition_year + exclusion_buffer
 
-    # Available years for null sampling
-    all_years = list(range(1985, 2019))
+    # Available years for null sampling (1984 = earliest topology cache window_end)
+    all_years = list(range(1984, 2019))
     null_years = [y for y in all_years if y < exclude_start or y > exclude_end]
 
     if len(null_years) == 0:
@@ -310,18 +320,25 @@ def matched_null(
     for i in tqdm(range(n_samples), desc=f"Matched null: {breakthrough.name}"):
         year = int(rng.choice(null_years))
 
-        summary = _compute_topology_for_window(
-            citations, cpc_map, sec_a, sec_b, year, window_years
-        )
+        # Average topology across ALL matching cross-section pairs for this year
+        # (same aggregation as pre-breakthrough metric extraction in NB04)
+        pair_metrics = []
+        for sec_a, sec_b in matching_pairs:
+            summary = _compute_topology_for_window(
+                citations, cpc_map, sec_a, sec_b, year, window_years
+            )
+            if summary is not None:
+                pair_metrics.append(summary)
 
-        if summary is None:
+        if not pair_metrics:
             continue
 
-        summary["window_end"] = year
-        summary["section_a"] = sec_a
-        summary["section_b"] = sec_b
-        summary["sample_idx"] = i
-        rows.append(summary)
+        # Average across pairs
+        avg = {k: float(np.mean([m[k] for m in pair_metrics])) for k in pair_metrics[0]}
+        avg["window_end"] = year
+        avg["section_pairs"] = len(pair_metrics)
+        avg["sample_idx"] = i
+        rows.append(avg)
 
     result = pd.DataFrame(rows)
 

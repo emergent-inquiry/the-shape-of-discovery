@@ -38,5 +38,65 @@
     "cpc_sections": ["G", "H"],
     "category": "computing",
     "description": "Universal serial bus standard for peripheral connectivity"
+  },
+  {
+    "name": "x86 Virtualization (VMware)",
+    "breakthrough_patents": ["6397242", "6496847"],
+    "filing_year": 1998,
+    "recognition_year": 2003,
+    "cpc_primary": ["G06F"],
+    "cpc_sections": ["G"],
+    "category": "computing",
+    "description": "Binary translation for x86 virtual machine monitor enabling cloud computing (VMware/Rosenblum)"
+  },
+  {
+    "name": "Intelligent Virtual Assistant (Siri)",
+    "breakthrough_patents": ["8677377", "8583418"],
+    "filing_year": 2008,
+    "recognition_year": 2011,
+    "cpc_primary": ["G06F", "G10L"],
+    "cpc_sections": ["G"],
+    "category": "computing",
+    "description": "Intelligent automated assistant with natural language understanding (Apple/SRI)"
+  },
+  {
+    "name": "NAND Flash Memory",
+    "breakthrough_patents": ["4531203", "4780855"],
+    "filing_year": 1982,
+    "recognition_year": 1999,
+    "cpc_primary": ["G11C", "H01L"],
+    "cpc_sections": ["G", "H"],
+    "category": "computing",
+    "description": "Electrically erasable nonvolatile memory with NAND cell architecture (Toshiba/Masuoka)"
+  },
+  {
+    "name": "Digital Micromirror Device (DLP)",
+    "breakthrough_patents": ["5061049", "5583688"],
+    "filing_year": 1990,
+    "recognition_year": 1996,
+    "cpc_primary": ["G02B", "G09G"],
+    "cpc_sections": ["G", "H"],
+    "category": "computing",
+    "description": "MEMS-based spatial light modulator for digital projection (Texas Instruments)"
+  },
+  {
+    "name": "Continuous Speech Recognition",
+    "breakthrough_patents": ["5202952", "5428707"],
+    "filing_year": 1990,
+    "recognition_year": 1997,
+    "cpc_primary": ["G10L", "G06F"],
+    "cpc_sections": ["G"],
+    "category": "computing",
+    "description": "Large-vocabulary continuous speech recognition using hidden Markov models (Dragon Systems/NaturallySpeaking)"
+  },
+  {
+    "name": "Superconducting Qubit Quantum Computing",
+    "breakthrough_patents": ["6495854", "6649929"],
+    "filing_year": 1999,
+    "recognition_year": 2017,
+    "cpc_primary": ["G06N", "H01L"],
+    "cpc_sections": ["G", "H"],
+    "category": "computing",
+    "description": "Superconducting flux qubit architecture for quantum annealing processors (D-Wave Systems)"
   }
 ]

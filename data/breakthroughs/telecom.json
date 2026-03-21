@@ -38,5 +38,65 @@
     "cpc_sections": ["H"],
     "category": "telecom",
     "description": "Short-range wireless personal area networking protocol"
+  },
+  {
+    "name": "RFID Tags",
+    "breakthrough_patents": ["5973598", "5528222"],
+    "filing_year": 1994,
+    "recognition_year": 2004,
+    "cpc_primary": ["G06K", "H04B"],
+    "cpc_sections": ["G", "H"],
+    "category": "telecom",
+    "description": "Radio frequency identification tags on flexible substrates for asset tracking (Alien Technology/TI)"
+  },
+  {
+    "name": "Fiber Bragg Grating",
+    "breakthrough_patents": ["4807950", "5007705"],
+    "filing_year": 1987,
+    "recognition_year": 1995,
+    "cpc_primary": ["G02B"],
+    "cpc_sections": ["G"],
+    "category": "telecom",
+    "description": "UV-written gratings in optical fiber for wavelength filtering and sensing (United Technologies)"
+  },
+  {
+    "name": "MP3 Audio Compression",
+    "breakthrough_patents": ["5579430"],
+    "filing_year": 1993,
+    "recognition_year": 1999,
+    "cpc_primary": ["H04S", "G10L"],
+    "cpc_sections": ["H"],
+    "category": "telecom",
+    "description": "Perceptual audio coding for digital music compression (Fraunhofer IIS)"
+  },
+  {
+    "name": "GPS Civilian Precision Receivers",
+    "breakthrough_patents": ["4754465"],
+    "filing_year": 1984,
+    "recognition_year": 2000,
+    "cpc_primary": ["G01S", "H04B"],
+    "cpc_sections": ["G", "H"],
+    "category": "telecom",
+    "description": "High-precision civilian GPS receiver using carrier-phase tracking (Trimble Navigation); enabled precision agriculture, surveying, and navigation after SA disabled 2000"
+  },
+  {
+    "name": "RFID EPC Gen2 UHF Standard",
+    "breakthrough_patents": ["7246751"],
+    "filing_year": 2003,
+    "recognition_year": 2006,
+    "cpc_primary": ["G06K", "H04B"],
+    "cpc_sections": ["G", "H"],
+    "category": "telecom",
+    "description": "EPCglobal Gen2 / ISO 18000-6C UHF RFID protocol enabling global supply chain tracking interoperability (Alien Technology/Impinj)"
+  },
+  {
+    "name": "5G Millimeter-Wave NR",
+    "breakthrough_patents": ["10784962"],
+    "filing_year": 2016,
+    "recognition_year": 2019,
+    "cpc_primary": ["H04W", "H04B"],
+    "cpc_sections": ["H"],
+    "category": "telecom",
+    "description": "5G New Radio millimeter-wave (24-100 GHz) beamforming for multi-gigabit wireless connectivity (Qualcomm)"
   }
 ]

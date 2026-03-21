@@ -38,5 +38,35 @@
     "cpc_sections": ["H", "G"],
     "category": "manufacturing",
     "description": "Active-pixel CMOS image sensors replacing CCD technology"
+  },
+  {
+    "name": "Stereolithography (SLA) 3D Printing",
+    "breakthrough_patents": ["4575330", "5059359"],
+    "filing_year": 1984,
+    "recognition_year": 1990,
+    "cpc_primary": ["B29C", "B33Y"],
+    "cpc_sections": ["B", "G"],
+    "category": "manufacturing",
+    "description": "UV laser curing of photopolymer resin layer by layer, the original 3D printing technology (Chuck Hull/3D Systems)"
+  },
+  {
+    "name": "Direct Metal Laser Sintering (DMLS)",
+    "breakthrough_patents": ["5753274", "5155324"],
+    "filing_year": 1990,
+    "recognition_year": 2010,
+    "cpc_primary": ["B22F", "B29C"],
+    "cpc_sections": ["B"],
+    "category": "manufacturing",
+    "description": "Laser sintering of metal powders for direct manufacturing of metal parts (EOS/DTM)"
+  },
+  {
+    "name": "Autonomous Vehicle LIDAR",
+    "breakthrough_patents": ["7969558", "7587260"],
+    "filing_year": 2006,
+    "recognition_year": 2017,
+    "cpc_primary": ["G01S", "G01C"],
+    "cpc_sections": ["G", "H"],
+    "category": "manufacturing",
+    "description": "360-degree rotating LIDAR sensor for autonomous vehicle perception (Velodyne/David Hall)"
   }
 ]

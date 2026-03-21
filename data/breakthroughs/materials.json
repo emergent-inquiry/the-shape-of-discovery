@@ -38,5 +38,35 @@
     "cpc_sections": ["C", "B"],
     "category": "materials",
     "description": "High-strength carbon fiber reinforced polymer composites"
+  },
+  {
+    "name": "Carbon Nanotubes",
+    "breakthrough_patents": ["5424054", "5165909"],
+    "filing_year": 1990,
+    "recognition_year": 2000,
+    "cpc_primary": ["B82Y", "D01F"],
+    "cpc_sections": ["C", "B"],
+    "category": "materials",
+    "description": "Single-wall and multi-wall carbon nanotube synthesis and production (IBM/Hyperion Catalysis)"
+  },
+  {
+    "name": "Quantum Dot Nanocrystals",
+    "breakthrough_patents": ["6207229"],
+    "filing_year": 1997,
+    "recognition_year": 2010,
+    "cpc_primary": ["B82Y", "C09K"],
+    "cpc_sections": ["C", "B"],
+    "category": "materials",
+    "description": "Highly luminescent semiconductor nanocrystals for displays and biomedical imaging (Bawendi/MIT)"
+  },
+  {
+    "name": "Supercapacitors (Ultracapacitors)",
+    "breakthrough_patents": ["5581438", "5862035"],
+    "filing_year": 1993,
+    "recognition_year": 2005,
+    "cpc_primary": ["H01G"],
+    "cpc_sections": ["H"],
+    "category": "materials",
+    "description": "High-energy-density double-layer capacitors for rapid energy storage and delivery"
   }
 ]
