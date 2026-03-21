@@ -22,7 +22,7 @@ The analysis reveals three findings:
 
 2. **The knowledge landscape is flattening over time.** Topological feature counts decline globally from ~1100 to ~570 (1985-2023) while cross-field citation rates increase. After scale normalization eliminated the density confound (r=0.970 → r=0.036), this trend persists — it reflects genuine structural change, not an artifact of growing network density.
 
-3. **Topological features carry cross-domain predictive signal comparable to simple features.** In Leave-One-Group-Out classification (holding out entire CPC pairs), logistic regression with topology-only features achieves AUC 0.80, compared to 0.82 for simple distance features. Random forest reverses: topology-only 0.74 vs simple 0.68. Neither feature set consistently dominates, suggesting topology captures complementary rather than redundant information.
+3. **Topological features outperform simple features in cross-domain prediction.** In Leave-One-Group-Out classification with exact CPC pair matching (28 groups, 3.8% base rate), logistic regression with topology-only features achieves AUC 0.61, compared to 0.27 for simple distance features. The task is much harder with exact matching, and only 3/28 folds contain breakthroughs, so results should be interpreted cautiously.
 
 These results are based on 21 breakthroughs with valid comparisons out of 34 cataloged, across all 28 cross-section CPC pairs spanning biotech, computing, energy, materials, manufacturing, and more.
 
@@ -156,11 +156,11 @@ These are critical for honest interpretation:
 
 4. **Sample size.** 21 breakthroughs with valid comparisons (NB04), 28 CPC groups (NB05). While expanded from the original 12/10, statistical power remains moderate. The effective sample size is further reduced by non-independence (breakthroughs share topology pairs).
 
-6. **Examiner-added citations.** ~74% of citations in post-2018 data are added by patent examiners, not inventors. These represent institutional knowledge rather than inventor awareness. This confound affects all patent citation analyses, not just ours.
+5. **Examiner-added citations.** ~74% of citations in post-2018 data are added by patent examiners, not inventors. These represent institutional knowledge rather than inventor awareness. This confound affects all patent citation analyses, not just ours.
 
-7. **Overlapping windows.** 5-year windows with 1-year stride share 80% of their data. This induces strong autocorrelation in time series and inflates the apparent smoothness of trends.
+6. **Overlapping windows.** 5-year windows with 1-year stride share 80% of their data. This induces strong autocorrelation in time series and inflates the apparent smoothness of trends.
 
-8. **Simple features are not independent baselines.** The "simple" features in NB05 (mean/median cosine distance) derive from the same co-citation matrix as the topological features. A truly independent baseline would use raw citation counts or patent volume.
+7. **Simple features are not independent baselines.** The "simple" features in NB05 (mean/median cosine distance) derive from the same co-citation matrix as the topological features. A truly independent baseline would use raw citation counts or patent volume.
 
 ---
 
