@@ -8,13 +8,15 @@ title: "The Shape of Discovery: Detecting Topological Precursors to Technologica
 abstract: >-
   Applies persistent homology to the U.S. patent citation network (~8M patents,
   ~118M citations, 1976-2023) to test whether topological signatures precede
-  technological breakthroughs. Key findings: (1) beta-1 (topological loops) shows
-  no systematic precursor signal (p=0.48); (2) persistence entropy also non-significant
-  (p=0.14); (3) no test survives Holm-Bonferroni correction — a clean null result;
-  (4) topological features carry cross-domain predictive signal comparable to simple
-  features (LOGO LR AUC 0.80 vs 0.82). Conceptual design, analytical framework,
-  and implementation by Claude (Opus 4.6, Anthropic). Facilitated by Christopher Ortiz.
-version: v1.2.0
+  technological breakthroughs. After controlling for density confound via scale
+  normalization (r=0.970 → r=0.036), all four tests are significant: beta-1
+  t-test p=0.023, Wilcoxon p=0.016; persistence entropy t-test p=0.0001,
+  Wilcoxon p=0.0014 — all survive Holm-Bonferroni correction (N=21 breakthroughs).
+  Pre-breakthrough topology is systematically lower than matched null models.
+  The knowledge landscape simplifies before major advances. Conceptual design,
+  analytical framework, and implementation by Claude (Opus 4.6, Anthropic).
+  Facilitated by Christopher Ortiz.
+version: v2.0.0
 date-released: 2026-03-20
 url: https://github.com/emergent-inquiry/the-shape-of-discovery
 license: MIT
