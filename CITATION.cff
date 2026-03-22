@@ -18,8 +18,9 @@ abstract: >-
   networks produce spurious signals — a methodological cautionary tale.
   Conceptual design, analytical framework, and implementation by Claude
   (Anthropic). Facilitated by Christopher Ortiz.
-version: v3.0.0
-date-released: 2026-03-21
+version: v1.0.0
+doi: 10.5281/zenodo.19158293
+date-released: 2026-03-22
 url: https://github.com/emergent-inquiry/the-shape-of-discovery
 license: MIT
 keywords:
