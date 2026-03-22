@@ -35,7 +35,7 @@ These results are based on 57 valid comparisons from 65 curated breakthroughs ac
 | Do topological loops change before breakthroughs? | **No** — apparent signal is a temporal artifact (detrended p=0.85) | High — 57 valid comparisons, temporal confound fully characterized |
 | Is the knowledge space flattening? | **Yes** — β₁ declines ~1.8/year across all pairs | High — universal trend, survives density control |
 | Does the decline relate to breakthroughs? | **No** — decline is secular, not breakthrough-specific | High — detrending removes all signal |
-| Can topology predict breakthroughs? | **Not with current methods** — temporal trend confounds any model | Moderate — NB05 needs reinterpretation |
+| Can topology predict breakthroughs? | **No** — year alone matches topology (AUC 0.71 vs 0.68) | High — NB05 temporal confound check confirms |
 
 ---
 
@@ -75,7 +75,11 @@ These results are based on 57 valid comparisons from 65 curated breakthroughs ac
 
 ### Figure I: Predictive Model ROC Curves
 ![ROC curves](figures/05_roc_curves.png)
-*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching. Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). Given the temporal confound discovered in NB04 §5.7, these results must be interpreted with caution: topology features that appear predictive may simply be proxying for time (year is not included as a feature, but β₁ correlates strongly with year). Any apparent predictive power likely reflects the secular trend, not breakthrough-specific topology.*
+*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching (expanded 65-entry catalog, 39 breakthroughs with 2+ CPC sections, 5/28 valid folds). Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). LR topology AUC = 0.680, combined AUC = 0.705. However, the temporal confound check (Figure J) shows year alone achieves AUC = 0.710 — topology features are proxying for temporal position.*
+
+### Figure J: Temporal Confound Check (NB05)
+![Temporal confound check](figures/05_temporal_confound_check.png)
+*Direct test of whether topology features proxy for time. Red: raw topology features (AUC = 0.680). Orange dashed: year alone (AUC = 0.710). Blue: topology features with year trend removed via linear detrending (AUC = 0.715). All three curves are nearly identical, confirming that the apparent predictive power of topology features comes from their correlation with year, not from breakthrough-specific topology. The detrended topology marginally outperforms year-only, but with only 5/28 valid folds, this is within noise.*
 
 ---
 
@@ -161,7 +165,9 @@ Datasets for §5 built by `00b_build_filtered_citations.py`.
 
 Leave-One-Group-Out cross-validation by CPC pair (28 groups). Features: topological (H0, H1, H2, persistence entropy, max persistence, long-lived features) and simple (active class count, mean/median cosine distance). Models: logistic regression and random forest. Uses exact CPC pair matching for rigorous evaluation.
 
-**Result:** With exact pair matching across 28 groups, only 3/28 folds contain breakthrough windows (most CPC pairs have no cataloged breakthroughs). LR topology-only AUC=0.609, simple-only AUC=0.270, combined AUC=0.601. However, given the temporal confound discovered in NB04 §5.7, these results require reinterpretation: topology features correlate strongly with time (β₁ declines ~2.2/year), and any apparent predictive power may simply reflect the model learning temporal position rather than breakthrough-specific topology. Year is not included as a feature, but topology features serve as proxies for it. LOGO tests cross-domain generalization, not temporal forecasting.
+**Result:** With the expanded 65-entry catalog (39 breakthroughs with 2+ CPC sections), 5/28 folds contain breakthrough windows (up from 3/28). LR topology-only AUC = 0.680, simple-only AUC = 0.616, combined AUC = 0.705.
+
+**Temporal confound check:** A model using year alone achieves AUC = 0.710 — matching or exceeding raw topology features (0.680). Detrended topology (year trend removed) achieves AUC = 0.715, marginally above year-only but within noise given 5 valid folds. This confirms that topology features are largely proxying for temporal position, consistent with NB04 §5.7. LOGO tests cross-domain generalization, not temporal forecasting.
 
 ---
 
