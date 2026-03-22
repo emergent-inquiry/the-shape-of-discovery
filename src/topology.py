@@ -450,13 +450,7 @@ def sliding_window_topology(
             continue
 
         # Convert to distance matrix
-        result = cocitation_to_distance(cocite_df.values)
-
-        if isinstance(result, tuple):
-            dist_matrix, active_mask = result
-        else:
-            dist_matrix = result
-            active_mask = np.ones(len(labels), dtype=bool)
+        dist_matrix, active_mask = cocitation_to_distance(cocite_df.values)
 
         if dist_matrix.size == 0:
             logger.warning(f"  [{ws}-{we}] Distance matrix empty, skipping")
@@ -501,9 +495,7 @@ def sliding_window_topology(
             logger.info(f"  [{ws}-{we}] Cached")
 
         # Aggressive memory cleanup
-        del cocite_df, dist_matrix, diagrams
-        if 'active_mask' in dir():
-            del active_mask
+        del cocite_df, dist_matrix, diagrams, active_mask
         gc.collect()
 
     df = pd.DataFrame(results)

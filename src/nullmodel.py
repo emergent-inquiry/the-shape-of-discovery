@@ -125,12 +125,7 @@ def _compute_topology_for_window(
         return None
 
     # Convert to distance
-    result = cocitation_to_distance(cocite_df.values)
-    if isinstance(result, tuple):
-        dist_matrix, active_mask = result
-    else:
-        dist_matrix = result
-        active_mask = np.ones(len(labels), dtype=bool)
+    dist_matrix, active_mask = cocitation_to_distance(cocite_df.values)
 
     if dist_matrix.size == 0:
         return None
