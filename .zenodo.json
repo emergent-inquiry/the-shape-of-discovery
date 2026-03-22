@@ -1,6 +1,6 @@
 {
   "title": "The Shape of Discovery: Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network",
-  "description": "Applies persistent homology to the U.S. patent citation network (~8M patents, ~118M citations, 1976-2023) to test whether topological signatures precede technological breakthroughs. Computes Betti numbers and persistence entropy on CPC subclass co-citation distance matrices in sliding time windows across all 28 CPC section pairs, with scale-normalized distances to control for density confound. Tests 34 cataloged breakthroughs (21 with valid comparisons) against matched null models via superposed epoch analysis. Key findings: (1) after density confound control (r=0.970 → r=0.036), all four statistical tests are significant and survive Holm-Bonferroni correction: beta-1 t-test p=0.023, Wilcoxon p=0.016; persistence entropy t-test p=0.0001, Wilcoxon p=0.0014; (2) pre-breakthrough topology is systematically lower — the knowledge landscape simplifies before major advances; (3) the global flattening trend (beta-1 declining from ~1100 to ~570) is confirmed as genuine structural change, not a density artifact. Conceptual design, analytical framework, and implementation by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. Facilitated by Christopher Ortiz.",
+  "description": "Applies persistent homology to the U.S. patent citation network (~8M patents, ~118M citations, 1976-2023) to test whether topological signatures precede technological breakthroughs. The central finding is null: an apparent precursor signal (Wilcoxon p < 0.001, N=57 valid comparisons from 65-entry catalog) is entirely explained by a temporal confound — beta-1 (H1 feature counts) declines universally at ~1.8/year across all 28 CPC section pairs due to network maturation. Z-scores correlate almost perfectly with filing year (Spearman rho = -0.921, p < 1e-20). After per-pair linear detrending, all significance vanishes (Wilcoxon p = 0.85). The project demonstrates three findings: (1) the precursor hypothesis does not survive temporal detrending; (2) the patent knowledge landscape is systematically flattening over time (genuine structural change, confirmed after density control); (3) temporal trends in TDA on evolving networks produce spurious signals — a methodological cautionary tale. Seven confound robustness checks implemented. Conceptual design, analytical framework, and implementation by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. Facilitated by Christopher Ortiz.",
   "creators": [
     {
       "name": "Ortiz, Christopher",
@@ -17,7 +17,8 @@
     "USPTO",
     "technological breakthroughs",
     "Betti numbers",
-    "innovation forecasting",
+    "null result",
+    "temporal confound",
     "knowledge graph",
     "co-citation analysis",
     "computational topology"
@@ -29,5 +30,5 @@
       "scheme": "url"
     }
   ],
-  "notes": "Conceived by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. This project represents a novel application of persistent homology to patent citation networks. After controlling for the density confound via scale normalization, topological signatures systematically precede breakthroughs — the knowledge landscape simplifies before major advances."
+  "notes": "Conceived by Claude (Opus 4.6, Anthropic) via claude.ai. Implementation by Claude Code. This project represents a novel application of persistent homology to patent citation networks. The central finding is null after controlling for a temporal confound: beta-1 declines universally across all CPC pairs, and the apparent precursor signal is a temporal artifact. The methodological lesson — that temporal trends in TDA on evolving networks produce spurious signals — is the primary contribution."
 }

@@ -357,6 +357,14 @@ def step_citations_filing_date(
     coverage = result["filing_date"].notna().mean()
     logger.info("Filing date coverage: %.1f%% of citations", 100 * coverage)
 
+    # Coerce filing_date to datetime (stored as strings in parquet).
+    # A handful of records have garbled years (e.g., 0975, 1074) that are
+    # outside the datetime64[ns] subtraction range — filter those to NaT.
+    result["filing_date"] = pd.to_datetime(result["filing_date"], errors="coerce")
+    # Keep only plausible patent-era dates (1900-2030)
+    valid_range = result["filing_date"].dt.year.between(1900, 2030)
+    result.loc[~valid_range, "filing_date"] = pd.NaT
+
     # Compute prosecution lag stats where both dates are available
     both_dates = result[result["filing_date"].notna()].copy()
     both_dates["lag_days"] = (

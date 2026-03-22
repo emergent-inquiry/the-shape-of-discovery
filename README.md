@@ -14,17 +14,17 @@
 
 We apply persistent homology to the U.S. patent citation network (~8M utility patents, ~118M citations, 1976-2023) to test whether topological signatures in the knowledge landscape systematically precede technological breakthroughs.
 
-**The central finding is that topological signatures do systematically differ before breakthroughs.** After controlling for a density confound via scale normalization (which reduced the spurious correlation between mean distance and beta-1 from r=0.970 to r=0.036), all four statistical tests survive Holm-Bonferroni correction: beta-1 t-test p=0.023, Wilcoxon p=0.016; persistence entropy t-test p=0.0001, Wilcoxon p=0.0014. Pre-breakthrough windows show *lower* beta-1 and *lower* persistence entropy than matched null models, suggesting the knowledge landscape simplifies — fields merge — before major advances.
+**The central finding is null.** After correcting a null model bug, expanding the breakthrough catalog from 21 to 57 valid comparisons, and controlling for density via scale normalization, an apparent precursor signal emerges (Wilcoxon p < 0.001). However, this signal is entirely explained by a **temporal confound**: β₁ (H1 feature counts) declines universally at ~1.8 per year across all 28 CPC section pairs, driven by network maturation rather than breakthrough dynamics. The z-scores correlate almost perfectly with filing year (Spearman ρ = -0.921, p < 10⁻²⁰). After detrending β₁ per CPC pair to remove the secular decline, the signal vanishes (Wilcoxon p = 0.85, only 40% of breakthroughs showing positive residuals).
 
 The analysis reveals three findings:
 
-1. **Topological simplification precedes breakthroughs.** Across 21 breakthroughs with valid comparisons, the 10-year precursor window shows systematically lower topological complexity (mean beta-1 z-score = -1.77, mean persistence entropy z-score = -26.0) compared to matched null models. The effect is consistent: both non-parametric (Wilcoxon) and parametric (t-test) tests agree, and all survive multiple-comparison correction.
+1. **The precursor hypothesis does not survive temporal detrending.** Across 57 breakthroughs with valid comparisons, the raw z-scores (mean = +1.12) are significant only because early breakthroughs (1980s, high-β₁ era) are compared against null models that average across all years including the lower-β₁ 2000s-2010s. Once each CPC pair's linear β₁ trend is removed, the pre-breakthrough topology is indistinguishable from any other period (t-test p = 0.72, Wilcoxon p = 0.85).
 
-2. **The knowledge landscape is flattening over time.** Topological feature counts decline globally from ~1100 to ~570 (1985-2023) while cross-field citation rates increase. After scale normalization eliminated the density confound (r=0.970 → r=0.036), this trend persists — it reflects genuine structural change, not an artifact of growing network density.
+2. **The knowledge landscape is systematically flattening.** H1 feature counts decline globally from ~130 to ~70 (per CPC pair average, 1984-2023) while cross-field citation rates increase. After scale normalization eliminated the density confound (r = 0.970 → r = 0.036), this trend persists — it reflects genuine structural change, not a density artifact. The patent network is losing topological complexity as fields merge.
 
-3. **Topological features outperform simple features in cross-domain prediction.** In Leave-One-Group-Out classification with exact CPC pair matching (28 groups, 3.8% base rate), logistic regression with topology-only features achieves AUC 0.61, compared to 0.27 for simple distance features. The task is much harder with exact matching, and only 3/28 folds contain breakthroughs, so results should be interpreted cautiously.
+3. **Temporal trends in TDA on evolving networks produce spurious signals.** This project demonstrates that naively comparing topological features at different time periods against a temporally-uniform null model can produce highly significant but entirely artifactual results. This is a methodological cautionary tale for the growing field of temporal TDA.
 
-These results are based on 21 breakthroughs with valid comparisons out of 34 cataloged, across all 28 cross-section CPC pairs spanning biotech, computing, energy, materials, manufacturing, and more.
+These results are based on 57 valid comparisons from 65 curated breakthroughs across all 28 cross-section CPC pairs, with seven confound robustness checks and temporal detrending.
 
 ---
 
@@ -32,10 +32,10 @@ These results are based on 21 breakthroughs with valid comparisons out of 34 cat
 
 | Question | Answer | Confidence |
 |----------|--------|------------|
-| Do topological loops change before breakthroughs? | **Yes** — they decrease (p=0.016) | Moderate — 21 valid comparisons, survives Holm-Bonferroni |
-| Does topological complexity change before breakthroughs? | **Yes** — it decreases (p=0.0001) | High — strongest signal, survives correction |
-| Can topology predict breakthroughs across domains? | **Partially** (LR AUC=0.61) | Low — 3/28 valid folds, 3.8% base rate |
-| Is the knowledge space flattening? | **Yes** — confirmed after density control | High — r=0.970 confound eliminated (r=0.036 post-normalization) |
+| Do topological loops change before breakthroughs? | **No** — apparent signal is a temporal artifact (detrended p=0.85) | High — 57 valid comparisons, temporal confound fully characterized |
+| Is the knowledge space flattening? | **Yes** — β₁ declines ~1.8/year across all pairs | High — universal trend, survives density control |
+| Does the decline relate to breakthroughs? | **No** — decline is secular, not breakthrough-specific | High — detrending removes all signal |
+| Can topology predict breakthroughs? | **Not with current methods** — temporal trend confounds any model | Moderate — NB05 needs reinterpretation |
 
 ---
 
@@ -53,13 +53,13 @@ These results are based on 21 breakthroughs with valid comparisons out of 34 cat
 ![Beta-1 heatmap](figures/02_beta1_heatmap.png)
 *Heatmap of H1 feature counts across all 28 CPC pairs over time. Warmer colors = more features. The top-left (early years) is consistently warmer than the bottom-right (recent years) across nearly all pairs. The decline is universal — not limited to a few high-profile pairs.*
 
-### Figure D: Superposed Epoch Analysis (THE KEY RESULT)
+### Figure D: Superposed Epoch Analysis
 ![Superposed epoch](figures/04_superposed_epoch.png)
-*All 21 breakthroughs aligned at t=0 (filing year), with topology averaged across -10 to +5 years. The red line is the mean H1 feature count across breakthroughs. The blue band is the 95% CI from the null model. The red line sits consistently at or slightly above the null mean in the precursor window, while individual breakthroughs show systematically negative z-scores relative to their matched nulls. The aggregate effect is subtle but statistically significant (p=0.016 Wilcoxon).*
+*All 57 breakthroughs aligned at t=0 (filing year), with topology averaged across -10 to +5 years. The red line is the mean H1 feature count across breakthroughs. The blue band is the 95% CI from the matched null model. The red line sits within the null CI throughout — the pre-breakthrough topology is not significantly different from the null. The subtle elevation at t=-5 to t=-2 reflects the temporal confound: breakthroughs with precursor windows in the high-β₁ 1980s pull the mean upward. After per-pair linear detrending, this elevation disappears entirely (see §5.7).*
 
 ### Figure E: Individual Breakthrough Topology
 ![Individual breakthroughs](figures/04_individual_beta1.png)
-*H1 feature counts for selected breakthroughs including previously skipped ones (CRISPR, mRNA, CAR-T, MapReduce). Each colored line is a different CPC pair containing the breakthrough's technology section. Red dashed = filing year. Orange shading = 10-year precursor window. With scale-normalized distances and all 28 pairs, a more consistent pattern of declining topology in precursor windows emerges.*
+*H1 feature counts for selected breakthroughs. Each colored line is a different CPC pair containing the breakthrough's technology section. Red dashed = filing year. Orange shading = 10-year precursor window. Individual trajectories show the universal declining β₁ trend rather than breakthrough-specific signatures. The apparent precursor patterns visible in some breakthroughs reflect the secular decline, not genuine topological precursors.*
 
 ### Figure F: Density Confound Check (RESOLVED)
 ![Density confound](figures/02_density_confound.png)
@@ -67,11 +67,15 @@ These results are based on 21 breakthroughs with valid comparisons out of 34 cat
 
 ### Figure G: Effect Sizes Per Breakthrough
 ![Effect sizes](figures/04_effect_sizes.png)
-*Z-scores for each breakthrough's pre-filing topology vs its matched null model (now 21+ breakthroughs including CRISPR, mRNA, CAR-T, MapReduce). Left: H1 feature count z-scores. Right: Persistence entropy z-scores. Red bars = above null, blue bars = below null. The pattern is now predominantly blue (below null) — pre-breakthrough topology is systematically lower than expected. All four aggregate tests survive Holm-Bonferroni correction.*
+*Z-scores for each breakthrough's pre-filing topology vs its matched null model (57 valid from 65-entry catalog). Left: H1 feature count z-scores. Right: Persistence entropy z-scores. Orange bars = above null, blue bars = below null. The pattern correlates almost perfectly with filing year (Spearman ρ = -0.921): early breakthroughs (1980s) show positive z-scores, recent ones (2010s) show negative z-scores. This is the temporal confound — not a genuine precursor signal. After per-pair detrending, z-scores are centered at zero with no systematic direction.*
 
-### Figure H: Predictive Model ROC Curves
+### Figure H: Temporal Confound Diagnostic (THE CRITICAL CONTROL)
+![Temporal confound](figures/04_s5_temporal_confound.png)
+*Panel (a): Raw z-scores vs breakthrough filing year show near-perfect correlation (r = -0.77, Spearman ρ = -0.921) — 60% of z-score variance is explained by filing year alone. Early breakthroughs (orange dots, 1980s) have positive z-scores; late breakthroughs (blue dots, 2010s) have negative z-scores. This is the temporal confound. Panel (b): After per-pair linear detrending of β₁, the correlation vanishes (r = 0.01). The detrended residuals scatter randomly around zero. Panel (c): Distribution of detrended residuals is centered at zero (mean = 0.21), with Wilcoxon p = 0.846. The precursor signal is null after removing the secular β₁ decline.*
+
+### Figure I: Predictive Model ROC Curves
 ![ROC curves](figures/05_roc_curves.png)
-*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching. Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). LR topology AUC=0.609 vs simple AUC=0.270 — topology substantially outperforms simple features. The task is hard with exact matching (3.8% base rate), and only 3/28 folds contain breakthroughs, so results should be interpreted cautiously.*
+*Leave-One-Group-Out cross-validation with 28 CPC pair groups and exact pair matching. Left: Logistic Regression. Right: Random Forest. Topology-only (blue) vs simple distance features (orange) vs combined (green). Given the temporal confound discovered in NB04 §5.7, these results must be interpreted with caution: topology features that appear predictive may simply be proxying for time (year is not included as a feature, but β₁ correlates strongly with year). Any apparent predictive power likely reflects the secular trend, not breakthrough-specific topology.*
 
 ---
 
@@ -126,35 +130,38 @@ All 28 CPC section pairs (8 choose 2) are computed, spanning every cross-discipl
 
 ### Notebook 03: The Breakthrough Catalog
 
-Curates 34 breakthroughs, validates them against the patent database, maps to CPC sections, and computes citation statistics.
+Curates 65 breakthroughs across 8 categories (biotech, computing, materials, energy, telecom, manufacturing, AI/ML, cryptography/security), validates them against the patent database, maps to CPC sections, and computes citation statistics. 57 of 65 have valid precursor windows (8 excluded: filing years ≤1984 predate the topology cache).
 
 ### Notebook 04: The Precursor Test
 
-**The hypothesis test.** For each breakthrough: (1) identify relevant CPC section pairs, (2) compute topological metrics in the 10 years before filing, (3) compare against matched null models (same CPC pair at non-breakthrough times). Aggregate via superposed epoch analysis (align all breakthroughs at t=0, average topology).
+**The hypothesis test.** For each of 65 cataloged breakthroughs: (1) identify relevant CPC section pairs, (2) compute topological metrics in the 10 years before filing, (3) compare against matched null models (same CPC pairs, different time windows, 100 samples each). Aggregate via superposed epoch analysis (align all breakthroughs at t=0, average topology).
 
-Statistical tests: one-sample t-test, Wilcoxon signed-rank, Holm-Bonferroni correction for 4 comparisons, Cohen's d on raw values.
+Statistical tests: one-sample t-test, Wilcoxon signed-rank, KS test, Holm-Bonferroni correction.
 
-**Result:** All four tests significant after Holm-Bonferroni correction. H1 feature count: t-test p=0.023, Wilcoxon p=0.016. Persistence entropy: t-test p=0.0001, Wilcoxon p=0.0014. Initial result with N=21 breakthroughs (34-entry catalog). With the expanded 65-entry catalog and all 28 CPC pairs accessible, N rises to ~57 valid comparisons (8 excluded: filing years ≤1984 predate the topology cache). Pre-breakthrough topology is systematically *lower* than matched null models — the knowledge landscape simplifies before major advances, as if fields merge together before a breakthrough crystallizes.
+**Raw result:** 57 valid comparisons. β₁ z-scores: mean = +1.12, 75% positive. t-test p < 0.0001, Wilcoxon p < 0.0001. ROC AUC = 0.641. This appears to be a strong positive result.
 
-**§5 Robustness Checks (Confound Analysis):** Four confounds are controlled in §5:
-- **§5.1 Examiner citations** (confound #1): ~74% of post-2018 citations are examiner-added. OLS partial-out: regress examiner_fraction from z-scores, re-test residuals.
-- **§5.2 Assignee self-citations** (confound #8): large companies inflate loop counts. Full topology re-run on 4 key pairs (AxC, AxG, CxH, GxH) using citations with intra-assignee edges removed.
-- **§5.3 Prosecution lag** (confound #2): ~2-3 year grant delay varies by domain. Sensitivity test: shift precursor window alignment using filing dates.
-- **§5.4 Policy shocks** (confound #3): Alice (2014) and AIA (2011) reshaped software patents. Discontinuity test; re-run excluding policy-adjacent breakthroughs.
-- **§5.5 Citation culture drift** (confound #5): tracked via mean_distance as density proxy.
-- **§5.6 Truncation bias** (confound #9): recent windows undercount citations; verified main result unaffected (all precursor windows end ≤ 2015).
+**Temporal confound (§5.7 — THE CRITICAL CONTROL):** β₁ declines ~2.2/year across all 28 CPC pairs (network maturation). The matched null model samples uniformly from 1984-2018, creating a systematic temporal asymmetry: early breakthroughs are compared against later (lower-β₁) null periods, producing positive z-scores; late breakthroughs are compared against earlier (higher-β₁) null periods, producing negative z-scores. Z-score vs filing year: Spearman ρ = -0.921 (p < 10⁻²⁰). After detrending β₁ per CPC pair: t-test p = 0.72, Wilcoxon p = 0.85. **The precursor signal is null.**
+
+**§5 Robustness Checks (Confound Analysis):** Seven confounds are controlled in §5:
+- **§5.1 Examiner citations** (confound #1): ~74% of post-2018 citations are examiner-added. OLS partial-out test.
+- **§5.2 Assignee self-citations** (confound #8): full topology re-run on 4 key pairs with intra-assignee edges removed.
+- **§5.3 Prosecution lag** (confound #2): filing date vs grant date sensitivity test.
+- **§5.4 Policy shocks** (confound #3): Alice (2014) and AIA (2011) discontinuity tests.
+- **§5.5 Citation culture drift** (confound #5): mean_distance temporal correlation.
+- **§5.6 Truncation bias** (confound #9): verified precursor windows unaffected.
+- **§5.7 Temporal confound** (THE CRITICAL CONTROL): per-pair β₁ detrending eliminates apparent signal.
 
 Datasets for §5 built by `00b_build_filtered_citations.py`.
 
-**§6 Leave-One-Out Robustness:** Jackknife sensitivity analysis. For each of the N valid breakthroughs, remove it and re-run the Wilcoxon test on the remaining N-1. If p<0.05 survives across ≥95% of LOO runs, the result is not driven by outliers. Also: sensitivity by minimum precursor window count, and z-score breakdown by technology category.
+**§6 Leave-One-Out Robustness:** Jackknife sensitivity, minimum-window-count analysis, category-level breakdown. Note: these checks test the raw (confounded) z-scores; the §5.7 temporal confound supersedes them.
 
-*Note on Strategy 3 (CPC subclass creation events):* Attempted but infeasible with 4-character subclass codes. The CPC system retroactively classifies historical patents, so most subclasses appear in our data from 1976. Only 1 subclass (G16Y) was genuinely created post-1990 in the 4-char taxonomy. A proper Strategy 3 requires subgroup-level CPC data (~200K codes) not in our current pipeline; documented as a future direction.
+*Note on Strategy 3 (CPC subclass creation events):* Attempted but infeasible with 4-character subclass codes. The CPC system retroactively classifies historical patents, so most subclasses appear in our data from 1976. Only 1 subclass (G16Y) was genuinely created post-1990 in the 4-char taxonomy. Documented as a future direction.
 
 ### Notebook 05: The Predictability Horizon
 
 Leave-One-Group-Out cross-validation by CPC pair (28 groups). Features: topological (H0, H1, H2, persistence entropy, max persistence, long-lived features) and simple (active class count, mean/median cosine distance). Models: logistic regression and random forest. Uses exact CPC pair matching for rigorous evaluation.
 
-**Result:** With exact pair matching across 28 groups, only 3/28 folds contain breakthrough windows (most CPC pairs have no cataloged breakthroughs). LR topology-only AUC=0.609, simple-only AUC=0.270, combined AUC=0.601. Topology features outperform simple features. However, the base rate is low (37/980 = 3.8% breakthrough windows), and the small number of valid folds limits generalizability. LOGO tests cross-domain generalization, not temporal forecasting.
+**Result:** With exact pair matching across 28 groups, only 3/28 folds contain breakthrough windows (most CPC pairs have no cataloged breakthroughs). LR topology-only AUC=0.609, simple-only AUC=0.270, combined AUC=0.601. However, given the temporal confound discovered in NB04 §5.7, these results require reinterpretation: topology features correlate strongly with time (β₁ declines ~2.2/year), and any apparent predictive power may simply reflect the model learning temporal position rather than breakthrough-specific topology. Year is not included as a feature, but topology features serve as proxies for it. LOGO tests cross-domain generalization, not temporal forecasting.
 
 ---
 
@@ -168,13 +175,15 @@ These are critical for honest interpretation:
 
 3. **Directionality lost.** The co-citation matrix is symmetrized before computing distances. H1 features represent ring-like arrangements in *similarity* space, not directed citation cycles between fields.
 
-4. **Sample size.** Initial analysis: 21 valid comparisons from 34-entry catalog. Expanded analysis: ~57 valid comparisons from 65-entry catalog (8 excluded: filing years ≤1984 predate topology cache). The NB04 §6 objective catalog adds 150-400 additional test events. Statistical power is moderate for the curated catalog. The effective sample size is further reduced by non-independence (breakthroughs share topology pairs).
+4. **Sample size.** 57 valid comparisons from 65-entry catalog (8 excluded: filing years ≤1984 predate topology cache). Statistical power is moderate. The effective sample size is further reduced by non-independence (breakthroughs share topology pairs).
 
 5. **Examiner-added citations.** ~74% of citations in post-2018 data are added by patent examiners, not inventors. These represent institutional knowledge rather than inventor awareness. Addressed in NB04 §5.1 via OLS partial-out; see CONFOUNDS.md for full analysis. This confound affects all patent citation analyses, not just ours.
 
 6. **Overlapping windows.** 5-year windows with 1-year stride share 80% of their data. This induces strong autocorrelation in time series and inflates the apparent smoothness of trends.
 
 7. **Simple features are not independent baselines.** The "simple" features in NB05 (mean/median cosine distance) derive from the same co-citation matrix as the topological features. A truly independent baseline would use raw citation counts or patent volume.
+
+8. **Temporal confound (the dominant limitation).** β₁ declines ~1.8/year across all 28 CPC pairs, driven by network maturation (increasing density, evolving citation practices, scale normalization effects). The matched null model samples uniformly from 1984-2018, creating a systematic temporal asymmetry that produces apparent precursor signals. After per-pair linear detrending, the precursor signal vanishes entirely. Any future analysis using temporal TDA on evolving networks must control for secular trends in topological features. This is not specific to patent networks — it applies to any growing network analyzed with persistent homology in sliding windows.
 
 ---
 
@@ -196,7 +205,9 @@ This project analyzes historical patent data for scientific understanding. **Not
 
 **On AI authorship:** The analytical framework, methodology, code, and written analysis were conceived and implemented by Claude (Opus 4.6, Anthropic). Christopher Ortiz facilitated the project, provided compute resources, and guided the research direction. We are transparent about this because intellectual honesty requires it. The AI contribution is documented in the description, not the author list, following current academic conventions for AI-assisted research.
 
-**On the journey from null to positive result:** The initial analysis yielded a null result across all metrics before the density confound was identified. We reported this prominently and honestly. Subsequent investigation revealed that growing network density (r=0.970 correlation with beta-1) was masking the real signal. After controlling for this via scale normalization and expanding from 10 to all 28 CPC pairs (recovering 8 previously skipped breakthroughs), all four tests became significant (beta-1 p=0.023, persistence entropy p=0.0001, all surviving Holm-Bonferroni). We document this trajectory because it illustrates how methodological rigor — fixing confounds rather than accepting convenient results — can reveal genuine signals hidden by artifacts. The positive result should still be interpreted cautiously given the limitations above.
+**On the journey from null to positive to null:** The initial analysis (March 2026, N=21) yielded a positive result (p=0.016) with all four tests surviving Holm-Bonferroni correction. During sample expansion, we discovered a **null model bug** that made single-section breakthroughs compare against global topology (~260 subclasses) instead of matching cross-section pairs. After fixing this bug and expanding to 65 breakthroughs (57 valid), the raw result appeared even stronger (p < 0.0001). However, the z-scores correlated almost perfectly with filing year (ρ = -0.921), revealing that the signal was driven by a **universal temporal decline in β₁** across all CPC pairs — not by breakthrough-specific topology. After per-pair detrending, all significance vanished (p = 0.85).
+
+We report this trajectory in full because intellectual honesty requires it. The null result after detrending is the correct finding. The methodological lessons — that temporal trends in TDA on evolving networks can produce highly significant but entirely artifactual results, and that null model temporal matching is critical — are themselves valuable contributions. A null result obtained through rigorous methodology is more useful to the field than a positive result built on a confounded foundation.
 
 ---
 
