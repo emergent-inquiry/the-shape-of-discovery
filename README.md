@@ -1,5 +1,7 @@
 # The Shape of Discovery
 
+[![DOI](https://zenodo.org/badge/1183126962.svg)](https://doi.org/10.5281/zenodo.19158293)
+
 ### Detecting Topological Precursors to Technological Breakthroughs in the USPTO Patent Citation Network
 
 **Concept & Analytical Design:** Claude (Opus 4.6, Anthropic) via claude.ai
